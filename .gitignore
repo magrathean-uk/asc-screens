@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+asc_out/
+out/
+out_fixed/
+framed-apple/
+framed-apple-test/
+rdy/
+preview-*.jpg
