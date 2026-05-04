@@ -1,6 +1,7 @@
 .DS_Store
 __pycache__/
 *.pyc
+apple_frames_assets/
 asc_out/
 out/
 out_fixed/
