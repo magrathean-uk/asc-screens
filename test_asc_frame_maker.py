@@ -5,6 +5,7 @@ from asc_screens import (
     classify_device_from_size,
     derive_background_palette,
     fit_inside,
+    expand_background_palette,
     resolve_background_palette,
     target_for_kind,
 )
@@ -35,6 +36,15 @@ class AscFrameMakerTests(unittest.TestCase):
         palette = resolve_background_palette("#FF8800")
         self.assertEqual(len(palette), 3)
         self.assertTrue(all(color.startswith("#") and len(color) == 7 for color in palette))
+
+    def test_two_color_background_becomes_three_colors(self):
+        palette = resolve_background_palette("#FF8800,#0088FF")
+        self.assertEqual(len(palette), 3)
+        self.assertEqual(palette[0], "#FF8800")
+        self.assertEqual(palette[2], "#0088FF")
+
+    def test_expand_background_palette_handles_two_colors(self):
+        self.assertEqual(expand_background_palette(["#111111", "#999999"]), ["#111111", "#555555", "#999999"])
 
     def test_background_derivation_changes_hue(self):
         palette = derive_background_palette("#FF8800")

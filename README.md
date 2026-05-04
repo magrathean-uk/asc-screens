@@ -30,9 +30,16 @@ At start, the CLI asks for background colors.
 Accepts:
 
 - one hex color like `#FF8800`
+- two hex colors like `#FF8800,#0088FF`
 - three hex colors like `#060914,#1A26FF,#20D7E8`
 
 If you give one color, the tool generates a 3-color hue palette from it.
+If you give two colors, the tool fills the middle stop.
+
+## Versions
+
+- `v1.0.0`: first CLI with device detection and framed ASC output
+- `v2.0.0`: background flow supports 1 to 3 colors
 
 ## Requirements
 
@@ -45,4 +52,3 @@ If you give one color, the tool generates a 3-color hue palette from it.
 ```bash
 python -m pip install -e .
 ```
-

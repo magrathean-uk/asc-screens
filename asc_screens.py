@@ -78,8 +78,8 @@ def normalize_hex(color):
 def parse_background_spec(text):
     parts = [part for part in re.split(r"[,\s]+", text.strip()) if part]
     colors = [normalize_hex(part) for part in parts]
-    if len(colors) not in (1, 3):
-        raise ValueError("Background needs 1 or 3 hex colors")
+    if not 1 <= len(colors) <= 3:
+        raise ValueError("Background needs 1 to 3 hex colors")
     return colors
 
 
@@ -101,10 +101,34 @@ def derive_background_palette(base):
     ]
 
 
+def blend_hex(left, right, ratio):
+    left = normalize_hex(left)
+    right = normalize_hex(right)
+    ratio = max(0.0, min(1.0, ratio))
+    lr = int(left[1:3], 16)
+    lg = int(left[3:5], 16)
+    lb = int(left[5:7], 16)
+    rr = int(right[1:3], 16)
+    rg = int(right[3:5], 16)
+    rb = int(right[5:7], 16)
+    red = round(lr + (rr - lr) * ratio)
+    green = round(lg + (rg - lg) * ratio)
+    blue = round(lb + (rb - lb) * ratio)
+    return f"#{red:02X}{green:02X}{blue:02X}"
+
+
+def expand_background_palette(colors):
+    if len(colors) == 1:
+        return derive_background_palette(colors[0])
+    if len(colors) == 2:
+        return [colors[0], blend_hex(colors[0], colors[1], 0.5), colors[1]]
+    return colors
+
+
 def resolve_background_palette(spec=None, theme=None):
     if spec:
         colors = parse_background_spec(spec)
-        return colors if len(colors) == 3 else derive_background_palette(colors[0])
+        return expand_background_palette(colors)
     if theme == "purple":
         return ["#3B005F", "#16002E", "#040018"]
     return DEFAULT_BACKGROUND[:]
@@ -229,7 +253,7 @@ def prompt_for_background(default_palette):
     if not sys.stdin.isatty():
         return default_palette
     raw = input(
-        "Background color(s). Use 1 hex or 3 hexes, comma separated. "
+        "Background color(s). Use 1 to 3 hexes, comma separated. "
         f"Enter for default {','.join(default_palette)}: "
     ).strip()
     if not raw:
