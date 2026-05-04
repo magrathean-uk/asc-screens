@@ -1,5 +1,13 @@
 # Releases
 
+## v2.1.0
+
+- Added guided `asc-gen` CLI.
+- Recursive screenshot discovery now handles nested folders.
+- Screenshot input supports PNG, JPG, JPEG, HEIC, HEIF, TIF, and TIFF.
+- Failed screenshots are skipped with a clear message so the rest still render.
+- iPhone output uses the largest accepted App Store portrait size.
+
 ## v2.0.0
 
 - Background prompt now takes 1 to 3 colors.

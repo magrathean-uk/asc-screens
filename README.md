@@ -8,12 +8,25 @@ CLI for making App Store Connect screenshots from raw device screenshots.
 asc-screens ./source
 ```
 
+Guided mode:
+
+```bash
+./asc-gen.py
+```
+
+Installed command:
+
+```bash
+asc-gen
+```
+
 Input can be:
 
-- `./source/iphone/*.png` and `./source/ipad/*.png`
-- one mixed folder of PNGs
+- nested `iphone/` and `ipad/` folders
+- one mixed folder of screenshots
 
-The tool detects device type from image size when folders are mixed.
+The tool detects device type from image size when folders are mixed. It accepts PNG,
+JPG, JPEG, HEIC, HEIF, TIF, and TIFF.
 
 ## Output
 
@@ -40,6 +53,7 @@ If you give two colors, the tool fills the middle stop.
 
 - `v1.0.0`: first CLI with device detection and framed ASC output
 - `v2.0.0`: background flow supports 1 to 3 colors
+- `v2.1.0`: guided CLI, recursive input, broader screenshot support
 
 ## Requirements
 

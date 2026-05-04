@@ -9,8 +9,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
+APP_STORE_IPHONE_TARGETS = (
+    (1242, 2688),
+    (2688, 1242),
+    (1284, 2778),
+    (2778, 1284),
+)
+
+
 TARGETS = {
-    "iphone": (1284, 2778),
+    "iphone": max((size for size in APP_STORE_IPHONE_TARGETS if size[1] > size[0]), key=lambda size: size[0] * size[1]),
     "ipad": (2064, 2752),
 }
 
@@ -20,6 +28,8 @@ FRAME_FIT = {
 }
 
 DEFAULT_BACKGROUND = ["#060914", "#1A26FF", "#20D7E8"]
+GENERATED_DIR_NAMES = {"_framed", "asc_out"}
+SCREENSHOT_EXTENSIONS = {".png", ".jpg", ".jpeg", ".heic", ".heif", ".tif", ".tiff"}
 
 
 @dataclass(frozen=True)
@@ -54,7 +64,19 @@ def image_size(path):
 
 
 def list_pngs(path):
-    return sorted(p for p in path.glob("*.png") if p.is_file())
+    return sorted(p for p in path.iterdir() if p.is_file() and p.suffix.lower() in SCREENSHOT_EXTENSIONS)
+
+
+def is_generated_path(path):
+    return any(part in GENERATED_DIR_NAMES for part in path.parts)
+
+
+def list_pngs_recursive(path):
+    return sorted(
+        p
+        for p in path.rglob("*")
+        if p.is_file() and p.suffix.lower() in SCREENSHOT_EXTENSIONS and not is_generated_path(p)
+    )
 
 
 def run(cmd):
@@ -164,15 +186,14 @@ def collect_jobs(input_root):
     root = Path(input_root)
     explicit = []
     for device in ("iphone", "ipad"):
-        device_dir = root / device
-        if device_dir.is_dir():
-            explicit.extend(ImageJob(source=path, device=device) for path in list_pngs(device_dir))
+        for device_dir in sorted(p for p in root.rglob(device) if p.is_dir() and not is_generated_path(p)):
+            explicit.extend(ImageJob(source=path, device=device) for path in list_pngs_recursive(device_dir))
 
     if explicit:
         return explicit
 
     mixed = []
-    for path in list_pngs(root):
+    for path in list_pngs_recursive(root):
         mixed.append(ImageJob(source=path, device=device_for_path(path)))
     return mixed
 
@@ -183,17 +204,22 @@ def frame_inputs(device, jobs, framed_dir, frames_bin, frame_color):
         return []
 
     framed_dir.mkdir(parents=True, exist_ok=True)
-    cmd = [str(frames_bin), "frame", "-o", str(framed_dir)]
-    if frame_color:
-        cmd += ["-c", frame_color]
-    cmd += [str(p) for p in files]
-    run(cmd)
-
     framed = []
     for source in files:
+        cmd = [str(frames_bin), "frame", "-o", str(framed_dir)]
+        if frame_color:
+            cmd += ["-c", frame_color]
+        cmd.append(str(source))
+        try:
+            run(cmd)
+        except subprocess.CalledProcessError as exc:
+            detail = exc.stderr.strip() if getattr(exc, "stderr", None) else "frame command failed"
+            print(f"Skip {source}: {detail}", file=sys.stderr)
+            continue
         framed_path = framed_dir / f"{source.stem}_framed.png"
         if not framed_path.exists():
-            raise FileNotFoundError(f"Frame output missing: {framed_path}")
+            print(f"Skip {source}: frame output missing", file=sys.stderr)
+            continue
         framed.append((source, framed_path))
     return framed
 
@@ -212,6 +238,10 @@ def composite(kind, source, framed, output_dir, background_colors):
             *background_command(target_w, target_h, background_colors),
             "(",
             str(framed),
+            "-filter",
+            "Lanczos",
+            "-define",
+            "filter:blur=0.9891028367558475",
             "-resize",
             f"{fit_w}x{fit_h}!",
             ")",
@@ -243,7 +273,13 @@ def process_kind(args, jobs, kind, background_colors):
     output_dir = Path(args.output_root) / kind
     framed_dir = Path(args.output_root) / "_framed" / kind
     framed = frame_inputs(kind, jobs, framed_dir, Path(args.frames_bin), args.frame_color)
-    outputs = [composite(kind, source, frame, output_dir, background_colors) for source, frame in framed]
+    outputs = []
+    for source, frame in framed:
+        try:
+            outputs.append(composite(kind, source, frame, output_dir, background_colors))
+        except subprocess.CalledProcessError as exc:
+            detail = exc.stderr.strip() if getattr(exc, "stderr", None) else "composite command failed"
+            print(f"Skip {source}: {detail}", file=sys.stderr)
     if args.validate and outputs:
         validate(output_dir)
     return outputs

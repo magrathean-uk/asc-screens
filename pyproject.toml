@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "asc-screens"
-version = "0.1.0"
+version = "2.1.0"
 description = "Frame screenshots for App Store Connect."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -12,6 +12,7 @@ license = { text = "MIT" }
 
 [project.scripts]
 asc-screens = "asc_screens:main"
+asc-gen = "asc_gen:main"
 
 [tool.setuptools]
-py-modules = ["asc_screens", "asc_frame_maker"]
+py-modules = ["asc_screens", "asc_frame_maker", "asc_gen"]
