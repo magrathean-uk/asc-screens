@@ -3,6 +3,8 @@ __pycache__/
 *.pyc
 apple_frames_assets/
 asc_out/
+iphone/
+ipad/
 out/
 out_fixed/
 framed-apple/
