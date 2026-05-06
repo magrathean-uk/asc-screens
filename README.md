@@ -51,6 +51,7 @@ If you give two colors, the tool fills the middle stop.
 
 ## Versions
 
+- `v2.1.1`: agent guide and repo hygiene refresh
 - `v1.0.0`: first CLI with device detection and framed ASC output
 - `v2.0.0`: background flow supports 1 to 3 colors
 - `v2.1.0`: guided CLI, recursive input, broader screenshot support

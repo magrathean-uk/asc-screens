@@ -1,5 +1,10 @@
 # Releases
 
+## v2.1.1
+
+- Added agent workflow notes.
+- Kept local screenshot input folders out of git.
+
 ## v2.1.0
 
 - Added guided `asc-gen` CLI.
