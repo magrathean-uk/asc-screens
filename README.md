@@ -2,6 +2,8 @@
 
 CLI for making App Store Connect screenshots from raw device screenshots.
 
+Built by [Magrathean UK](https://magrathean.uk).
+
 ## Use
 
 ```bash
@@ -68,4 +70,3 @@ If you give two colors, the tool fills the middle stop.
 python -m pip install -e .
 ```
 
-Built by [Magrathean UK](https://magrathean.uk).
