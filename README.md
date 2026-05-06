@@ -67,3 +67,5 @@ If you give two colors, the tool fills the middle stop.
 ```bash
 python -m pip install -e .
 ```
+
+Built by [Magrathean UK](https://magrathean.uk).
