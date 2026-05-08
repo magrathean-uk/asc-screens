@@ -70,3 +70,16 @@ If you give two colors, the tool fills the middle stop.
 python -m pip install -e .
 ```
 
+## Legal
+
+Copyright © 2026 Magrathean UK Ltd. asc-screens is licensed under the **MIT Licence**; see [`LICENSE`](./LICENSE) for the full text. The MIT Licence permits commercial and non-commercial use, modification, and redistribution, provided the copyright notice and the permission notice are retained in all copies or substantial portions.
+
+### Trademarks and disclaimers
+
+App Store, App Store Connect, Apple, the Apple logo, iPhone, and iPad are trademarks of Apple Inc. ImageMagick is a trademark of ImageMagick Studio LLC. asc-screens is **not affiliated with, endorsed by, sponsored by, or in any way officially connected to** Apple Inc., the Apple Frames CLI, ImageMagick Studio LLC, or `appshots`. References to these names exist solely for descriptive interoperability.
+
+For commercial enquiries, email <contact@magrathean.uk>.
+
+---
+
+Magrathean UK Ltd. is a company registered in England and Wales (Company No. 16955343) with registered office at 16 Caledonian Court West Street, Watford, England, WD17 1RY.
