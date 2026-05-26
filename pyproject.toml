@@ -13,6 +13,7 @@ license = { text = "MIT" }
 [project.scripts]
 asc-screens = "asc_screens:main"
 asc-gen = "asc_gen:main"
+asc-screens-ci = "asc_screens_ci:main"
 
 [tool.setuptools]
-py-modules = ["asc_screens", "asc_frame_maker", "asc_gen"]
+py-modules = ["asc_screens", "asc_frame_maker", "asc_gen", "asc_screens_ci"]

@@ -28,6 +28,12 @@ Build all locales from config:
 asc-screens --config asc-screens.json
 ```
 
+Upload from CI only when design inputs changed:
+
+```bash
+asc-screens-ci --config .asc-screens-ci.json
+```
+
 Guided mode:
 
 ```bash
@@ -112,6 +118,7 @@ Unreleased:
 - Review and upload manifests are written after successful builds.
 - Optional locale copy files drive multi-locale output and upload grouping.
 - Optional top and bottom text templates can add safe background captions.
+- `asc-screens-ci` can fingerprint design inputs, skip repeated uploads, and call the external `asc` CLI.
 
 ## Requirements
 
@@ -176,6 +183,30 @@ Successful builds write:
 - `asc_review.json` for operator review order
 - `asc_review.html` for visual contact-sheet review
 - `asc_upload.json` for `asc-cli` or other upload tooling handoff
+
+## CI Upload
+
+`asc-screens-ci` is for app repos that want screenshot uploads on `main` only
+when design inputs changed. It keeps this tool local-only for asset generation
+and uses the external `asc` CLI for App Store Connect.
+
+Minimal `.asc-screens-ci.json`:
+
+```json
+{
+  "app_id": "123456789",
+  "version": "1.2.3",
+  "asc_screens_config": "asc-screens.json",
+  "output_root": "asc_out"
+}
+```
+
+Default device mapping:
+
+- `iphone`: `IPHONE_69`
+- `ipad`: `IPAD_PRO_3GEN_129`
+
+See [`docs/asc-upload-ci.md`](./docs/asc-upload-ci.md) for the GitHub Actions workflow.
 
 ## Install
 

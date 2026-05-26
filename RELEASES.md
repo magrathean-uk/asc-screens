@@ -10,6 +10,7 @@
 - Added review and upload manifest outputs.
 - Added locale copy-file builds for upload grouping.
 - Added safe top and bottom caption templates.
+- Added `asc-screens-ci` for design-change-gated screenshot upload through `asc`.
 
 ## v2.1.1
 
