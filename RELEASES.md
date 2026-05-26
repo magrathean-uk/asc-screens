@@ -1,5 +1,16 @@
 # Releases
 
+## Unreleased
+
+- Updated iPhone export to the latest accepted App Store lane.
+- Added built-in validation for format, size, and PNG transparency.
+- Added `--check` mode for validating existing screenshots without framing.
+- Added latest-lane aliases to guided and direct CLI flows.
+- Added JSON config mode for repeatable runs.
+- Added review and upload manifest outputs.
+- Added locale copy-file builds for upload grouping.
+- Added safe top and bottom caption templates.
+
 ## v2.1.1
 
 - Added agent workflow notes.
