@@ -15,33 +15,34 @@ def load_cli():
 class AscGenCliTests(unittest.TestCase):
     def test_detected_kinds_preserves_iphone_ipad_order(self):
         cli = load_cli()
-        jobs = [SimpleNamespace(device="ipad"), SimpleNamespace(device="iphone")]
+        jobs = [SimpleNamespace(device="mac"), SimpleNamespace(device="ipad"), SimpleNamespace(device="iphone")]
 
-        self.assertEqual(cli.detected_kinds(jobs), ["iphone", "ipad"])
+        self.assertEqual(cli.detected_kinds(jobs), ["iphone", "ipad", "mac"])
 
     def test_choose_kinds_uses_detected_when_blank(self):
         cli = load_cli()
-        jobs = [SimpleNamespace(device="iphone"), SimpleNamespace(device="ipad")]
+        jobs = [SimpleNamespace(device="iphone"), SimpleNamespace(device="ipad"), SimpleNamespace(device="mac")]
 
-        self.assertEqual(cli.choose_kinds("", jobs), ["iphone", "ipad"])
+        self.assertEqual(cli.choose_kinds("", jobs), ["iphone", "ipad", "mac"])
 
     def test_choose_kinds_accepts_both(self):
         cli = load_cli()
 
-        self.assertEqual(cli.choose_kinds("both", []), ["iphone", "ipad"])
+        self.assertEqual(cli.choose_kinds("both", []), ["iphone", "ipad", "mac"])
 
     def test_choose_kinds_accepts_short_aliases(self):
         cli = load_cli()
 
         self.assertEqual(cli.choose_kinds("i", []), ["iphone"])
         self.assertEqual(cli.choose_kinds("p", []), ["ipad"])
-        self.assertEqual(cli.choose_kinds("b", []), ["iphone", "ipad"])
+        self.assertEqual(cli.choose_kinds("m", []), ["mac"])
+        self.assertEqual(cli.choose_kinds("b", []), ["iphone", "ipad", "mac"])
 
     def test_choose_kinds_accepts_latest_aliases(self):
         cli = load_cli()
 
-        self.assertEqual(cli.choose_kinds("latest", []), ["iphone-latest", "ipad-latest"])
-        self.assertEqual(cli.choose_kinds("l", []), ["iphone-latest", "ipad-latest"])
+        self.assertEqual(cli.choose_kinds("latest", []), ["iphone-latest", "ipad-latest", "mac-latest"])
+        self.assertEqual(cli.choose_kinds("l", []), ["iphone-latest", "ipad-latest", "mac-latest"])
 
     def test_choose_validation_mode_accepts_check_only(self):
         cli = load_cli()
@@ -59,9 +60,9 @@ class AscGenCliTests(unittest.TestCase):
 
     def test_count_by_kind(self):
         cli = load_cli()
-        jobs = [SimpleNamespace(device="iphone"), SimpleNamespace(device="ipad"), SimpleNamespace(device="iphone")]
+        jobs = [SimpleNamespace(device="iphone"), SimpleNamespace(device="ipad"), SimpleNamespace(device="iphone"), SimpleNamespace(device="mac")]
 
-        self.assertEqual(cli.count_by_kind(jobs), {"iphone": 2, "ipad": 1})
+        self.assertEqual(cli.count_by_kind(jobs), {"iphone": 2, "ipad": 1, "mac": 1})
 
 
 if __name__ == "__main__":

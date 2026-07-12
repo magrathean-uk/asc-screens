@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import sys
+import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -32,9 +33,17 @@ APP_STORE_IPAD_TARGETS = (
     (2266, 1488),
 )
 
+APP_STORE_MAC_TARGETS = (
+    (1280, 800),
+    (1440, 900),
+    (2560, 1600),
+    (2880, 1800),
+)
+
 TARGETS = {
     "iphone": max((size for size in APP_STORE_IPHONE_TARGETS if size[1] > size[0]), key=lambda size: size[0] * size[1]),
     "ipad": max((size for size in APP_STORE_IPAD_TARGETS if size[1] > size[0]), key=lambda size: size[0] * size[1]),
+    "mac": max(APP_STORE_MAC_TARGETS, key=lambda size: size[0] * size[1]),
 }
 
 FRAME_FIT = {
@@ -51,10 +60,12 @@ TEMPLATES = {
 EXPORT_TARGETS = {
     "iphone": [("iphone", TARGETS["iphone"])],
     "ipad": [("ipad", TARGETS["ipad"])],
-    "all": [("iphone", TARGETS["iphone"]), ("ipad", TARGETS["ipad"])],
+    "mac": [("mac", TARGETS["mac"])],
+    "all": [("iphone", TARGETS["iphone"]), ("ipad", TARGETS["ipad"]), ("mac", TARGETS["mac"])],
     "iphone-latest": [("iphone", TARGETS["iphone"])],
     "ipad-latest": [("ipad", TARGETS["ipad"])],
-    "all-latest": [("iphone", TARGETS["iphone"]), ("ipad", TARGETS["ipad"])],
+    "mac-latest": [("mac", TARGETS["mac"])],
+    "all-latest": [("iphone", TARGETS["iphone"]), ("ipad", TARGETS["ipad"]), ("mac", TARGETS["mac"])],
 }
 
 DEFAULT_BACKGROUND = ["#060914", "#1A26FF", "#20D7E8"]
@@ -108,6 +119,12 @@ def output_path_for_source(output_dir, source):
     return Path(output_dir) / f"{Path(source).stem}.png"
 
 
+def title_from_source(source):
+    stem = Path(source).stem
+    title = re.sub(r"(?i)(?:-ipad|-iphone)$", "", stem).strip()
+    return title or stem
+
+
 def image_size(path):
     result = subprocess.run(
         ["magick", "identify", "-format", "%w %h", str(path)],
@@ -144,6 +161,8 @@ def supported_sizes_for_kind(kind):
         return APP_STORE_IPHONE_TARGETS
     if kind == "ipad":
         return APP_STORE_IPAD_TARGETS
+    if kind == "mac":
+        return APP_STORE_MAC_TARGETS
     raise ValueError(f"Unknown kind: {kind}")
 
 
@@ -245,6 +264,8 @@ def background_command(width, height, colors):
 
 def classify_device_from_size(width, height):
     ratio = min(width, height) / max(width, height)
+    if width > height and ratio >= 0.60 and ratio < 0.70:
+        return "mac"
     return "ipad" if ratio >= 0.64 else "iphone"
 
 
@@ -297,7 +318,7 @@ def print_validation_summary(summary):
 def collect_jobs(input_root):
     root = Path(input_root)
     explicit = []
-    for device in ("iphone", "ipad"):
+    for device in ("iphone", "ipad", "mac"):
         for device_dir in sorted(p for p in root.rglob(device) if p.is_dir() and not is_generated_path(p)):
             explicit.extend(ImageJob(source=path, device=device) for path in list_pngs_recursive(device_dir))
 
@@ -341,7 +362,10 @@ def composite(kind, source, framed, output_dir, background_colors, target_size=N
     max_w, max_h = FRAME_FIT[kind]
     framed_w, framed_h = image_size(framed)
     fit_w, fit_h = fit_inside((framed_w, framed_h), (max_w, max_h))
-    copy = copy or {"title": "", "subtitle": ""}
+    if copy is None:
+        copy = {"title": title_from_source(source), "subtitle": ""}
+    else:
+        copy = copy or {"title": "", "subtitle": ""}
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_path_for_source(output_dir, source)
@@ -383,6 +407,9 @@ def validate(output_dir, kind):
 
 
 def process_kind(args, jobs, kind, background_colors, target_size=None, template="plain", copy=None):
+    if kind == "mac":
+        return process_mac(args, jobs, target_size=target_size)
+
     output_dir = Path(args.output_root) / kind
     framed_dir = Path(args.output_root) / "_framed" / kind
     framed = frame_inputs(kind, jobs, framed_dir, Path(args.frames_bin), args.frame_color)
@@ -405,6 +432,102 @@ def process_kind(args, jobs, kind, background_colors, target_size=None, template
     return outputs
 
 
+def process_mac(args, jobs, target_size=None):
+    target_w, target_h = target_size or target_for_kind("mac")
+    output_dir = Path(args.output_root) / "mac"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    outputs = []
+    for job in jobs:
+        if job.device != "mac":
+            continue
+        output = output_path_for_source(output_dir, job.source)
+        try:
+            run(
+                [
+                    "magick",
+                    str(job.source),
+                    "-filter",
+                    "Lanczos",
+                    "-resize",
+                    f"{target_w}x{target_h}!",
+                    "-alpha",
+                    "off",
+                    "-colorspace",
+                    "sRGB",
+                    "-depth",
+                    "8",
+                    "-type",
+                    "TrueColor",
+                    "-strip",
+                    f"PNG24:{output}",
+                ]
+            )
+        except subprocess.CalledProcessError as exc:
+            detail = exc.stderr.strip() if getattr(exc, "stderr", None) else "scale command failed"
+            print(f"Skip {job.source}: {detail}", file=sys.stderr)
+            continue
+        outputs.append(output)
+    if args.validate and outputs:
+        validate(output_dir, "mac")
+    return outputs
+
+
+def app_preview_output_path(output_root, source, size=(886, 1920), fps=30, max_duration=30):
+    width, height = size
+    return Path(output_root) / "video" / f"{Path(source).stem}_{width}x{height}_{fps}fps_{max_duration}s_level40_silent-aac.mp4"
+
+
+def build_app_preview_command(source, output, size=(886, 1920), fps=30, max_duration=30):
+    width, height = size
+    return [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(source),
+        "-f",
+        "lavfi",
+        "-t",
+        str(max_duration),
+        "-i",
+        "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-t",
+        str(max_duration),
+        "-vf",
+        f"scale={width}:{height}:flags=lanczos,fps={fps},setsar=1",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "slow",
+        "-crf",
+        "12",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "high",
+        "-level",
+        "4.0",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "256k",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]
+
+
+def process_app_preview(source, output_root, size=(886, 1920), fps=30, max_duration=30):
+    output = app_preview_output_path(output_root, source, size=size, fps=fps, max_duration=max_duration)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    run(build_app_preview_command(source, output, size=size, fps=fps, max_duration=max_duration))
+    return output
+
+
 def validate_existing_images(source):
     jobs = collect_jobs(source)
     if not jobs:
@@ -412,7 +535,7 @@ def validate_existing_images(source):
         return 1
     selected = [job.source for job in jobs]
     exit_code = 0
-    for kind in ("iphone", "ipad"):
+    for kind in ("iphone", "ipad", "mac"):
         files = [path for path in selected if classify_device_from_size(*image_size(path)) == kind]
         if not files:
             continue
@@ -463,7 +586,7 @@ def resolve_config_paths(args, config_path):
 
 def resolve_localized_builds(copy_file=None, locale=None):
     if not copy_file:
-        return [(None, {"title": "", "subtitle": ""})]
+        return [(None, None)]
     localizations = load_localizations(copy_file)
     if locale:
         selected = localizations.get(locale)
@@ -481,36 +604,56 @@ def default_font():
     return None
 
 
+def wrap_caption(text, width):
+    lines = textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False)
+    return "\n".join(lines) if lines else text
+
+
 def overlay_text_command(width, height, template, copy):
     template_spec = TEMPLATES[template]
     title = copy.get("title", "").strip()
     subtitle = copy.get("subtitle", "").strip()
     if template_spec["gravity"] is None or (not title and not subtitle):
         return []
-    command = ["-fill", "#FFFFFF", "-gravity", template_spec["gravity"]]
     font = default_font()
-    if font:
-        command.extend(["-font", font])
+    text_width = max(1, width - 160)
+
+    def text_layer(text, wrap_width, pointsize_factor, wrapped_pointsize_factor, offset):
+        wrapped_text = wrap_caption(text, wrap_width)
+        pointsize_factor = wrapped_pointsize_factor if "\n" in wrapped_text else pointsize_factor
+        layer = [
+            "(",
+            "-background",
+            "none",
+            "-fill",
+            "#FFFFFF",
+            "-gravity",
+            "center",
+        ]
+        if font:
+            layer.extend(["-font", font])
+        layer.extend(
+            [
+                "-pointsize",
+                str(round(width * pointsize_factor)),
+                "-size",
+                f"{text_width}x",
+                f"caption:{wrapped_text}",
+                ")",
+                "-gravity",
+                template_spec["gravity"],
+                "-geometry",
+                offset,
+                "-composite",
+            ]
+        )
+        return layer
+
+    command = []
     if title:
-        command.extend(
-            [
-                "-pointsize",
-                str(round(width * 0.055)),
-                "-annotate",
-                template_spec["title_offset"],
-                title,
-            ]
-        )
+        command.extend(text_layer(title, 26, 0.055, 0.046, template_spec["title_offset"]))
     if subtitle:
-        command.extend(
-            [
-                "-pointsize",
-                str(round(width * 0.032)),
-                "-annotate",
-                template_spec["subtitle_offset"],
-                subtitle,
-            ]
-        )
+        command.extend(text_layer(subtitle, 34, 0.032, 0.028, template_spec["subtitle_offset"]))
     return command
 
 
@@ -635,6 +778,10 @@ def main():
     parser.add_argument("--template", choices=sorted(TEMPLATES), default="plain")
     parser.add_argument("--copy-file", help="JSON file with locale -> {title, subtitle}.")
     parser.add_argument("--locale", help="Build one locale from the copy file.")
+    parser.add_argument("--preview", help="Build a Mac/iPhone app preview video from an MP4.")
+    parser.add_argument("--preview-size", default="886x1920", help="Preview export size, for example 886x1920.")
+    parser.add_argument("--preview-fps", type=int, default=30)
+    parser.add_argument("--preview-max-duration", type=int, default=30)
     parser.add_argument("--check", action="store_true", help="Validate existing screenshots without framing.")
     parser.add_argument("--validate", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
@@ -650,6 +797,23 @@ def main():
 
     if not shutil.which("magick"):
         raise SystemExit("Need ImageMagick: brew install imagemagick")
+
+    if args.preview:
+        if not shutil.which("ffmpeg"):
+            raise SystemExit("Need ffmpeg: brew install ffmpeg")
+        try:
+            width, height = (int(part) for part in args.preview_size.lower().split("x", 1))
+        except ValueError as exc:
+            raise SystemExit("Use --preview-size WIDTHxHEIGHT") from exc
+        output = process_app_preview(
+            args.preview,
+            args.output_root,
+            size=(width, height),
+            fps=args.preview_fps,
+            max_duration=args.preview_max_duration,
+        )
+        print(f"Done: {output}")
+        return
 
     if args.check:
         raise SystemExit(validate_existing_images(args.source))

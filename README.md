@@ -175,6 +175,7 @@ Rules:
 - titles and subtitles are optional
 - `plain` template ignores copy text
 - `title-top` and `title-bottom` place text on the background, not on the Apple frame
+- if no copy file is supplied, `title-top` and `title-bottom` use the source filename as the title and strip a trailing `-ipad` or `-iphone`
 
 ## Manifests
 

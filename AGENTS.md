@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Read [README](./README.md) first.
+Read `README.md` and `docs/asc-upload-ci.md` before changing the related flow.
 
 ## Scope
 
@@ -11,15 +11,17 @@ Read [README](./README.md) first.
 ## Commands
 
 ```bash
-python -m pip install -e .
+python3 -m pip install -e .
+python3 -m unittest discover -v
 asc-screens ./source
-./asc-gen.py
+asc-gen
 ```
 
 ## Source of truth
 
 - `asc_screens.py` owns screenshot discovery, sizing, palette expansion, and export.
-- `asc-gen.py` is the guided local wrapper.
+- `asc_gen.py` owns the guided local wrapper; `asc-gen.py` is its script shim.
+- `asc_screens_ci.py` owns design-input fingerprinting and `asc` upload handoff.
 - `pyproject.toml` owns package metadata and console entry points.
 
 ## Repo rules
@@ -27,4 +29,6 @@ asc-screens ./source
 - Accept mixed iPhone and iPad inputs.
 - Detect device type from image size when folders are mixed.
 - Treat `asc_out/`, framed output folders, preview images, and tool caches as generated.
-- Do not add telemetry or network calls.
+- Keep framing local and add no telemetry. Network access belongs only to the
+  explicit `asc-screens-ci` upload handoff.
+- Preserve unrelated dirty work and report any skipped verification.

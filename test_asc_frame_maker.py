@@ -8,7 +8,10 @@ from unittest.mock import patch
 
 from asc_screens import (
     APP_STORE_IPHONE_TARGETS,
+    APP_STORE_MAC_TARGETS,
+    app_preview_output_path,
     background_command,
+    build_app_preview_command,
     classify_device_from_size,
     collect_jobs,
     derive_background_palette,
@@ -18,6 +21,8 @@ from asc_screens import (
     list_pngs,
     load_config,
     load_localizations,
+    composite,
+    title_from_source,
     overlay_text_command,
     output_path_for_source,
     resolve_background_palette,
@@ -25,7 +30,9 @@ from asc_screens import (
     resolve_config_paths,
     frame_inputs,
     ImageJob,
+    process_app_preview,
     process_kind,
+    process_mac,
     target_for_kind,
     validate_output_dir,
     validate_screenshot_file,
@@ -39,11 +46,16 @@ class AscFrameMakerTests(unittest.TestCase):
     def test_target_for_kind(self):
         self.assertEqual(target_for_kind("iphone"), (1320, 2868))
         self.assertEqual(target_for_kind("ipad"), (2064, 2752))
+        self.assertEqual(target_for_kind("mac"), (2880, 1800))
 
     def test_iphone_target_uses_largest_app_store_size(self):
         portrait_targets = [size for size in APP_STORE_IPHONE_TARGETS if size[1] > size[0]]
         largest = max(portrait_targets, key=lambda size: size[0] * size[1])
         self.assertEqual(target_for_kind("iphone"), largest)
+
+    def test_mac_target_uses_largest_app_store_size(self):
+        largest = max(APP_STORE_MAC_TARGETS, key=lambda size: size[0] * size[1])
+        self.assertEqual(target_for_kind("mac"), largest)
 
     def test_fit_inside_preserves_aspect_ratio(self):
         self.assertEqual(fit_inside((1470, 3000), (1110, 2530)), (1110, 2265))
@@ -57,10 +69,16 @@ class AscFrameMakerTests(unittest.TestCase):
 
         self.assertEqual(output, Path("asc_out/iphone/01-home.png"))
 
+    def test_title_from_source_strips_ipad_suffix(self):
+        self.assertEqual(title_from_source(Path("01-home-ipad.png")), "01-home")
+        self.assertEqual(title_from_source(Path("01-home.png")), "01-home")
+
     def test_classify_device_from_size(self):
         self.assertEqual(classify_device_from_size(1284, 2778), "iphone")
         self.assertEqual(classify_device_from_size(1320, 2868), "iphone")
         self.assertEqual(classify_device_from_size(2064, 2752), "ipad")
+        self.assertEqual(classify_device_from_size(2880, 1800), "mac")
+        self.assertEqual(classify_device_from_size(3456, 2234), "mac")
 
     def test_validate_png_reports_wrong_size(self):
         report = validate_screenshot_file(Path("bad.png"), "iphone", size_reader=lambda _: (1080, 1920))
@@ -103,8 +121,11 @@ class AscFrameMakerTests(unittest.TestCase):
     def test_expand_kind_selection_for_all_latest(self):
         self.assertEqual(
             expand_export_targets("all-latest"),
-            [("iphone", (1320, 2868)), ("ipad", (2064, 2752))],
+            [("iphone", (1320, 2868)), ("ipad", (2064, 2752)), ("mac", (2880, 1800))],
         )
+
+    def test_expand_kind_selection_for_mac(self):
+        self.assertEqual(expand_export_targets("mac"), [("mac", (2880, 1800))])
 
     def test_load_config_reads_json_file(self):
         with TemporaryDirectory() as tmp:
@@ -231,8 +252,19 @@ class AscFrameMakerTests(unittest.TestCase):
 
         self.assertIn("-gravity", command)
         self.assertIn("south", command)
-        self.assertIn("Fast EV planning", command)
-        self.assertIn("Route, charge, arrive", command)
+        self.assertTrue(any("Fast EV planning" in part for part in command))
+        self.assertTrue(any("Route, charge, arrive" in part for part in command))
+
+    @patch("asc_screens.run")
+    @patch("asc_screens.overlay_text_command", side_effect=lambda width, height, template, copy: [copy["title"]])
+    @patch("asc_screens.background_command", return_value=[])
+    @patch("asc_screens.image_size", return_value=(100, 200))
+    @patch("asc_screens.fit_inside", return_value=(100, 200))
+    def test_composite_uses_filename_title_when_copy_missing(self, _fit_inside, _image_size, _background_command, _overlay_text_command, run_mock):
+        composite("iphone", Path("launch-screen-ipad.png"), Path("frame.png"), Path("out"), ["#000000", "#111111", "#222222"], template="title-top")
+
+        command = run_mock.call_args.args[0]
+        self.assertIn("launch-screen", command)
 
     def test_write_upload_manifest_groups_by_locale_and_family(self):
         with TemporaryDirectory() as tmp:
@@ -308,16 +340,20 @@ class AscFrameMakerTests(unittest.TestCase):
             root = Path(tmp)
             iphone = root / "set-a" / "iphone"
             ipad = root / "set-b" / "nested" / "ipad"
+            mac = root / "set-c" / "mac"
             iphone.mkdir(parents=True)
             ipad.mkdir(parents=True)
+            mac.mkdir(parents=True)
             phone_shot = iphone / "phone.PNG"
             pad_shot = ipad / "pad.png"
+            mac_shot = mac / "mac.png"
             phone_shot.touch()
             pad_shot.touch()
+            mac_shot.touch()
 
             jobs = collect_jobs(root)
 
-            self.assertEqual([(job.source, job.device) for job in jobs], [(phone_shot, "iphone"), (pad_shot, "ipad")])
+            self.assertEqual([(job.source, job.device) for job in jobs], [(phone_shot, "iphone"), (pad_shot, "ipad"), (mac_shot, "mac")])
 
     def test_collect_jobs_ignores_generated_output_folders(self):
         with TemporaryDirectory() as tmp:
@@ -381,6 +417,48 @@ class AscFrameMakerTests(unittest.TestCase):
                     outputs = process_kind(args, jobs, "iphone", ["#000000", "#111111", "#222222"])
 
             self.assertEqual(outputs, [output])
+
+    @patch("asc_screens.run")
+    def test_process_mac_scales_exact_without_framing_or_text(self, run_mock):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "desktop.png"
+            source.touch()
+            args = Namespace(output_root=root / "out", validate=False)
+
+            outputs = process_mac(args, [ImageJob(source, "mac")], target_size=(2880, 1800))
+
+        self.assertEqual(len(outputs), 1)
+        command = run_mock.call_args.args[0]
+        self.assertIn("-resize", command)
+        self.assertIn("2880x1800!", command)
+        self.assertNotIn("-composite", command)
+        self.assertNotIn("caption:", " ".join(command))
+
+    def test_app_preview_command_uses_app_store_safe_video_settings(self):
+        command = build_app_preview_command(Path("in.mp4"), Path("out.mp4"), size=(886, 1920), fps=30, max_duration=30)
+
+        self.assertIn("scale=886:1920:flags=lanczos,fps=30,setsar=1", command)
+        self.assertIn("-level", command)
+        self.assertIn("4.0", command)
+        self.assertIn("-t", command)
+        self.assertIn("30", command)
+        self.assertIn("anullsrc=channel_layout=stereo:sample_rate=44100", command)
+        self.assertIn("-c:a", command)
+        self.assertIn("aac", command)
+        self.assertIn("256k", command)
+
+    def test_app_preview_output_path_names_constraints(self):
+        output = app_preview_output_path(Path("asc_out"), Path("Screen Recording.mp4"), (886, 1920), 30)
+
+        self.assertEqual(output, Path("asc_out/video/Screen Recording_886x1920_30fps_30s_level40_silent-aac.mp4"))
+
+    @patch("asc_screens.run")
+    def test_process_app_preview_runs_ffmpeg_command(self, run_mock):
+        output = process_app_preview(Path("source.mp4"), Path("asc_out"), size=(886, 1920), fps=30, max_duration=30)
+
+        self.assertEqual(output, Path("asc_out/video/source_886x1920_30fps_30s_level40_silent-aac.mp4"))
+        self.assertEqual(run_mock.call_args.args[0][0], "ffmpeg")
 
 
 if __name__ == "__main__":

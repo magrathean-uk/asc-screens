@@ -18,11 +18,11 @@ from asc_screens import (
 
 def detected_kinds(jobs):
     found = {job.device for job in jobs}
-    return [kind for kind in ("iphone", "ipad") if kind in found]
+    return [kind for kind in ("iphone", "ipad", "mac") if kind in found]
 
 
 def count_by_kind(jobs):
-    return {kind: sum(1 for job in jobs if job.device == kind) for kind in ("iphone", "ipad")}
+    return {kind: sum(1 for job in jobs if job.device == kind) for kind in ("iphone", "ipad", "mac")}
 
 
 def choose_kinds(answer, jobs):
@@ -31,16 +31,16 @@ def choose_kinds(answer, jobs):
         kinds = detected_kinds(jobs)
         return kinds or ["iphone", "ipad"]
     if value in {"both", "all", "b"}:
-        return ["iphone", "ipad"]
+        return ["iphone", "ipad", "mac"]
     if value in {"latest", "l"}:
-        return ["iphone-latest", "ipad-latest"]
-    aliases = {"i": "iphone", "phone": "iphone", "p": "ipad", "pad": "ipad"}
+        return ["iphone-latest", "ipad-latest", "mac-latest"]
+    aliases = {"i": "iphone", "phone": "iphone", "p": "ipad", "pad": "ipad", "m": "mac"}
     value = aliases.get(value, value)
-    if value in {"iphone", "ipad", "iphone-latest", "ipad-latest", "all-latest"}:
+    if value in {"iphone", "ipad", "mac", "iphone-latest", "ipad-latest", "mac-latest", "all-latest"}:
         if value == "all-latest":
-            return ["iphone-latest", "ipad-latest"]
+            return ["iphone-latest", "ipad-latest", "mac-latest"]
         return [value]
-    raise ValueError("Choose iphone, ipad, or both")
+    raise ValueError("Choose iphone, ipad, mac, or all")
 
 
 def choose_validation_mode(answer):
@@ -79,10 +79,10 @@ def find_frames_bin():
 
 def prompt_kinds(jobs):
     auto = detected_kinds(jobs)
-    auto_text = "both" if auto == ["iphone", "ipad"] else (auto[0] if auto else "both")
+    auto_text = "all" if len(auto) > 1 else (auto[0] if auto else "all")
     while True:
         try:
-            return choose_kinds(ask("3. iphone, ipad, both, or latest", auto_text), jobs)
+            return choose_kinds(ask("3. iphone, ipad, mac, all, or latest", auto_text), jobs)
         except ValueError as exc:
             print(exc)
 
@@ -106,16 +106,16 @@ def prompt_background():
             print(f"Bad colour: {exc}")
 
 
-def prompt_template():
+def prompt_template(default="plain"):
     while True:
         try:
-            return choose_template(ask("5. template plain, top, or bottom", "plain"))
+            return choose_template(ask("6. template plain, top, or bottom", default))
         except ValueError as exc:
             print(exc)
 
 
 def prompt_copy_file():
-    value = ask("6. copy file json path. Enter for none", "")
+    value = ask("5. copy file json path. Enter for filename titles", "")
     return value or None
 
 
@@ -134,15 +134,15 @@ def main():
         raise SystemExit("No screenshots found. Use PNG, JPG, JPEG, HEIC, HEIF, TIF, or TIFF.")
 
     counts = count_by_kind(jobs)
-    print(f"Found {len(jobs)} screenshots: {counts['iphone']} iphone, {counts['ipad']} ipad")
+    print(f"Found {len(jobs)} screenshots: {counts['iphone']} iphone, {counts['ipad']} ipad, {counts['mac']} mac")
     mode = prompt_mode()
     if mode == "check":
         raise SystemExit(validate_existing_images(source))
 
     kinds = prompt_kinds(jobs)
     background_colors = prompt_background()
-    template = prompt_template()
     copy_file = prompt_copy_file()
+    template = prompt_template("top" if not copy_file else "plain")
     locale = prompt_locale() if copy_file else None
 
     output_root = ask("8. Output folder", "asc_out")
