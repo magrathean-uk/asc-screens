@@ -1,46 +1,32 @@
-# AGENTS.md
+# asc-screens
 
-Read `README.md` and `docs/asc-upload-ci.md` before changing the related flow.
+Complete authorized changes and necessary safe local setup through the relevant checks. Use bounded delegation for independent work when useful, with clear file ownership. Do not ask again for actions already authorized by the task.
 
-## Scope
+## Working boundaries
 
-- Work only inside this repo.
-- Keep the CLI prompt-driven and local-only.
-- Keep generated screenshot output out of git.
+- Keep the command-line workflow local. Do not add telemetry or network calls to screenshot generation, validation, framing, or preview creation.
+- `asc-screens-ci` is the only upload handoff. It invokes the external `asc` CLI and uses `--replace`; run replacement uploads only within the authorized target and scope. Ask if that authority or target is missing.
+- Keep changes scoped to this repository and preserve unrelated dirty work.
+- Preserve local source captures. Generated output, frame intermediates, review manifests, preview files, and `.asc-screens-cache/` stay out of Git.
+- Keep iPhone, iPad, and Mac support aligned in direct and guided flows. Caption templates apply to framed iPhone and iPad output; Mac screenshots scale without framing or text.
+- The CI default device map covers iPhone and iPad only. A Mac upload needs an explicit supported device mapping before it can use the upload handoff.
 
-## Commands
+## Code map
+
+- `asc_screens.py` discovers images, builds screenshots and previews, validates output, and writes review and upload manifests.
+- `asc_gen.py` is the interactive wrapper. `asc-gen.py` and `asc_frame_maker.py` are entry-point shims.
+- `asc_screens_ci.py` fingerprints declared design inputs and delegates authenticated upload to `asc`.
+- `pyproject.toml` defines the package metadata and the `asc-screens`, `asc-gen`, and `asc-screens-ci` commands.
+
+## Dependencies and checks
+
+Use ImageMagick for validation and rendering, Apple Frames for device framing, and FFmpeg for `--preview`. The optional upload handoff also needs `asc` and its separately configured authentication.
 
 ```bash
-python3 -m pip install -e .
+python3 -m py_compile asc_screens.py asc_frame_maker.py asc_gen.py asc_screens_ci.py
 python3 -m unittest discover -v
-asc-screens ./source
-asc-gen
 ```
 
-## Source of truth
+For a focused image check, use `asc-screens --check ./existing-screenshots` after installing the package, or run `python3 asc_screens.py --check ./existing-screenshots`. Discovery excludes every path containing `asc_out` or `_framed`, including in check mode. Use a separate copy of output when checking exports. Run the relevant test module first; commands and manual acceptance checks are in `CONTRIBUTING.md`. A render or upload is a separate acceptance step that needs representative inputs and the relevant external tools or account access.
 
-- `asc_screens.py` owns screenshot discovery, sizing, palette expansion, and export.
-- `asc_gen.py` owns the guided local wrapper; `asc-gen.py` is its script shim.
-- `asc_screens_ci.py` owns design-input fingerprinting and `asc` upload handoff.
-- `pyproject.toml` owns package metadata and console entry points.
-
-## Repo rules
-
-- Accept mixed iPhone and iPad inputs.
-- Detect device type from image size when folders are mixed.
-- Treat `asc_out/`, framed output folders, preview images, and tool caches as generated.
-- Keep framing local and add no telemetry. Network access belongs only to the
-  explicit `asc-screens-ci` upload handoff.
-- Preserve unrelated dirty work and report any skipped verification.
-
-## Working guidance — GPT-6 Astra
-
-Based on [OpenAI's Astra prompting guidance](https://developers.openai.com/api/docs/guides/latest-model#prompting-best-practices), reviewed 2026-09-19. These are working instructions, not a change to model or API settings.
-
-- Complete the authorized task through implementation and relevant verification. Make routine choices yourself; ask only when a missing decision materially changes the result or requires new authority. Prepare reviewable work before requesting any necessary final approval.
-- Current user instructions take precedence over repository and skill guidance within system and tool constraints. Preserve explicit exclusions and owner holds. Historical plans and session notes do not grant current authorization. If a file or skill blocks progress, identify its exact path and rule.
-- Keep changes small and practical. Inspect current source and Git status, preserve unrelated work, and use existing conventions. Do not add speculative abstractions, dependencies, or unrelated cleanup. Commit, push, deploy, install, and live-service changes require authorization for that action.
-- Use the reasoning effort the task needs. Follow explicit project delegation rules; otherwise use subagents only when requested, with bounded independent tasks and distinct file ownership. Batch independent reads; serialize dependent operations and conflicting edits.
-- Run meaningful checks for the changed behavior and required project gates. Avoid tests that merely repeat low-impact edits. Broaden or repeat verification only after changes, failures, or unresolved concerns. Distinguish local checks from device, browser, and live-service evidence.
-- Write concise, plain, outcome-first updates. State what changed, why, verification, and material gaps. Avoid filler and unnecessary formatting.
-- Keep durable instructions in AGENTS.md and maintained product documentation. Do not create duplicate assistant instruction files or disposable plans, transcripts, status reports, and screenshots in source directories unless requested. Preserve source, tests, fixtures, assets, licences, and operational evidence regardless of who created them.
+Read `README.md` before changing the user workflow and `docs/asc-upload-ci.md` before changing the upload handoff.

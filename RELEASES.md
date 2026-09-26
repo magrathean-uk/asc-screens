@@ -1,16 +1,26 @@
 # Releases
 
+The package metadata currently declares version `2.1.1`. The unreleased section
+records behavior present in the checkout; it does not identify a published release.
+
 ## Unreleased
 
-- Updated iPhone export to the latest accepted App Store lane.
-- Added built-in validation for format, size, and PNG transparency.
-- Added `--check` mode for validating existing screenshots without framing.
-- Added latest-lane aliases to guided and direct CLI flows.
-- Added JSON config mode for repeatable runs.
-- Added review and upload manifest outputs.
-- Added locale copy-file builds for upload grouping.
-- Added safe top and bottom caption templates.
-- Added `asc-screens-ci` for design-change-gated screenshot upload through `asc`.
+- iPhone export uses the largest portrait size in the local target table,
+  `1320x2868`.
+- Built-in checks cover image format, configured dimensions and PNG transparency.
+- `--check` validates existing images without framing, subject to the input
+  discovery limitations described in the [README](README.md).
+- Device aliases include `iphone-latest`, `ipad-latest`, `mac-latest` and
+  `all-latest`. They select sizes from the local target table.
+- JSON configuration supports repeatable builds.
+- Successful screenshot output produces review JSON, an HTML contact sheet and
+  an upload manifest.
+- Locale copy files group screenshots for upload; iPhone and iPad caption templates
+  place text above or below the frame.
+- Mac exports resize screenshots to the configured Mac target without a frame.
+- Preview-video export uses FFmpeg to produce H.264 video with silent AAC audio.
+- `asc-screens-ci` fingerprints configured inputs and uses completion markers to
+  gate replacement uploads through an external `asc` executable.
 
 ## v2.1.1
 

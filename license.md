@@ -1,17 +1,15 @@
-# License — asc-screens
+# Licensing
 
-## This Project
+## Controlling grant
 
-`asc-screens` is open-source software licensed under the [MIT License](./LICENSE).
-Copyright © 2026 Magrathean UK Ltd.
+`asc-screens` is licensed under the [MIT License](./LICENSE). The unmodified root `LICENSE` file controls if this page conflicts with it.
 
----
+The source notice identifies the project copyright as `Copyright (c) 2026 Magrathean UK Ltd.` This page explains the repository layout and does not change that notice or grant additional rights.
 
-## Third-Party Dependencies
+## Package and external tools
 
-### Python CLI — `pyproject.toml`
+`pyproject.toml` declares the package license as `MIT` and declares no Python runtime dependencies. The build backend is setuptools.
 
-| Package | License | Declared in |
-|---|---|---|
-| `pillow` | HPND / MIT-like | `pyproject.toml` |
-| `pydantic` | MIT | `pyproject.toml` |
+Rendering and optional upload workflows call separately installed tools: ImageMagick (`magick`), Apple Frames (`frames`), FFmpeg for App Preview creation, and `asc` for upload. Those tools are not relicensed by this repository and remain subject to their own terms and notices.
+
+See [TRADEMARKS.md](./TRADEMARKS.md) for name-use notices.
