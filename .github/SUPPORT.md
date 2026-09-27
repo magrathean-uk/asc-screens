@@ -1,7 +1,7 @@
 # Support
 
-Start with the [README](README.md) for local rendering and the
-[upload guide](docs/asc-upload-ci.md) for fingerprinting and upload behavior.
+Start with the [README](../README.md) for local rendering and the
+[upload guide](../docs/asc-upload-ci.md) for fingerprinting and upload behavior.
 
 For ordinary support, use the project's published contact address,
 [contact@magrathean.uk](mailto:contact@magrathean.uk). Include the command, package

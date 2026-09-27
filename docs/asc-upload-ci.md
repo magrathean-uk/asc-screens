@@ -111,7 +111,7 @@ app repository's workflow:
    with the review HTML and JSON files if storing review artifacts.
 
 Keep credentials and private screenshot content out of logs and public artifacts.
-The [security policy](../SECURITY.md) describes reporting and data boundaries.
+The [security policy](../.github/SECURITY.md) describes reporting and data boundaries.
 
 ## External command contract
 

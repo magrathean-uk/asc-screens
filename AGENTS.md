@@ -27,6 +27,10 @@ python3 -m py_compile asc_screens.py asc_frame_maker.py asc_gen.py asc_screens_c
 python3 -m unittest discover -v
 ```
 
-For a focused image check, use `asc-screens --check ./existing-screenshots` after installing the package, or run `python3 asc_screens.py --check ./existing-screenshots`. Discovery excludes every path containing `asc_out` or `_framed`, including in check mode. Use a separate copy of output when checking exports. Run the relevant test module first; commands and manual acceptance checks are in `CONTRIBUTING.md`. A render or upload is a separate acceptance step that needs representative inputs and the relevant external tools or account access.
+For a focused image check, use `asc-screens --check ./existing-screenshots` after installing the package, or run `python3 asc_screens.py --check ./existing-screenshots`. Discovery excludes every path containing `asc_out` or `_framed`, including in check mode. Use a separate copy of output when checking exports. Run the relevant test module first; commands and manual acceptance checks are in `.github/CONTRIBUTING.md`. A render or upload is a separate acceptance step that needs representative inputs and the relevant external tools or account access.
 
 Read `README.md` before changing the user workflow and `docs/asc-upload-ci.md` before changing the upload handoff.
+
+## Legal files
+
+Legal files (`LICENSE`, `NOTICE`, `docs/legal/`, contributor terms, copyright and attribution strings) are owner-controlled: change them only on the owner's explicit instruction.

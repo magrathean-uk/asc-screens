@@ -24,7 +24,7 @@ The package metadata declares no Python runtime dependencies. External tools and
 
 ## Safe harbour
 
-Magrathean UK Ltd. will not pursue a good-faith researcher for security disclosures that:
+MAGRATHEAN UK LTD will not pursue a good-faith researcher for security disclosures that:
 
 - Target non-production test systems or researcher-owned environments;
 - Avoid persistence, destructive changes, denial of service, and access to personal or customer data;

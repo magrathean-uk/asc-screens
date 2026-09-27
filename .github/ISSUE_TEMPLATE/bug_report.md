@@ -6,7 +6,7 @@ labels: ''
 assignees: ''
 ---
 
-<!-- For vulnerabilities, follow SECURITY.md instead of opening a public issue.
+<!-- For vulnerabilities, follow ../SECURITY.md instead of opening a public issue.
 Do not include credentials, account data or private screenshots. -->
 
 ## What happened

@@ -1,8 +1,8 @@
 # Contributing
 
 Keep changes focused on screenshot generation, validation, guided input or the
-explicit upload handoff. Read the [README](README.md) for user flows and
-[AGENTS.md](AGENTS.md) for the source map and project boundaries.
+explicit upload handoff. Read the [README](../README.md) for user flows and
+[AGENTS.md](../AGENTS.md) for the source map and project boundaries.
 
 ## Local setup
 
@@ -53,7 +53,7 @@ of the result. Unit tests alone do not prove visual quality or App Store accepta
 
 For CI changes, use mocked commands to verify the handoff. A live run replaces
 remote screenshots and requires an intended target and explicit authorization.
-Read the [upload guide](docs/asc-upload-ci.md) before operating it.
+Read the [upload guide](../docs/asc-upload-ci.md) before operating it.
 
 ## Submitting a change
 
@@ -63,6 +63,6 @@ any external tool versions relevant to the result. Keep unrelated work intact.
 Use synthetic or redacted images in reproductions; omit credentials and account
 data. Send vulnerabilities through [SECURITY.md](SECURITY.md), not a public issue.
 
-Preserve the [MIT license](LICENSE), copyright notices and third-party attribution.
+Preserve the [MIT license](../LICENSE), copyright notices and third-party attribution.
 Only submit code and assets you have permission to share. See the
-[licensing notes](license.md) for the boundary between this code and external tools.
+[licensing notes](../docs/legal/third-party-notices.md) for the boundary between this code and external tools.

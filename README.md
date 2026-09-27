@@ -1,16 +1,37 @@
-# asc-screens
+<p align="center">
+  <img src="https://raw.githubusercontent.com/magrathean-uk/magrathean-uk/main/assets/icons/asc-screens.png" width="96" height="96" alt="">
+</p>
 
-`asc-screens` is a local Python CLI for turning iPhone, iPad, and Mac captures into App Store Connect screenshot sets. It can frame phone and tablet captures, scale Mac captures, add optional captions, validate image dimensions and transparency, and write review and upload manifests.
+<h1 align="center">asc-screens</h1>
 
-Install from a source checkout using the steps below.
+<p align="center">A local CLI that turns iPhone, iPad and Mac captures into App Store Connect screenshot sets.</p>
 
-## Install
+<p align="center">
+  <a href="docs/index.md">Documentation</a>
+</p>
+
+## Overview
+
+asc-screens frames phone and tablet captures, scales Mac captures, adds optional captions, validates image dimensions and transparency, and writes review and upload manifests. It installs from a source checkout and runs locally or in CI; there is no published package.
+
+## Features
+
+- Frames iPhone and iPad captures with Apple Frames onto a generated background
+- Scales Mac captures directly to the target dimensions, without a frame
+- Optional caption templates driven by a locale-keyed copy file
+- Validates image format, configured dimensions and PNG transparency
+- Writes an HTML contact sheet plus JSON review and upload manifests
+- Converts an MP4 to a silent, App Store-oriented preview video
+- Fingerprints design inputs and delegates upload to the external `asc` CLI
+
+## Getting started
 
 Requirements:
 
 - Python 3.10 or later
 - ImageMagick, with `magick` on `PATH`
 - Apple Frames CLI, with `frames` on `PATH` or supplied with `--frames-bin`
+- `ffmpeg` on `PATH`, for App-preview video generation only
 
 Clone or otherwise obtain a checkout, then run from that checkout:
 
@@ -18,17 +39,9 @@ Clone or otherwise obtain a checkout, then run from that checkout:
 python3 -m pip install -e .
 ```
 
-The editable install registers these commands:
+The editable install registers three commands: `asc-screens`, `asc-gen`, and `asc-screens-ci`. ImageMagick, Apple Frames and FFmpeg are external tools and must be installed separately.
 
-```text
-asc-screens
-asc-gen
-asc-screens-ci
-```
-
-ImageMagick and Apple Frames are external tools and must be installed separately. App-preview video generation also requires `ffmpeg` on `PATH`.
-
-## Build screenshots
+### Build screenshots
 
 The direct command accepts a directory containing nested `iphone/`, `ipad/`, or `mac/` folders, or a mixed directory. If named device subdirectories exist, discovery uses them and ignores loose mixed inputs. Otherwise, it classifies files by aspect ratio; this is a heuristic, so inspect the selected family. It reads PNG, JPG, JPEG, HEIC, HEIF, TIF, and TIFF source files.
 
@@ -36,7 +49,7 @@ The direct command accepts a directory containing nested `iphone/`, `ipad/`, or 
 asc-screens ./source
 ```
 
-The default output is `asc_out/`. Phone and tablet inputs are framed with Apple Frames and composited onto a generated background. Mac inputs are resized directly to the selected dimensions, which can change their aspect ratio. They do not receive frames, backgrounds or captions. The CLI still checks for Apple Frames before any screenshot build, including Mac-only builds. Existing generated folders named `asc_out` and `_framed` are excluded from source discovery.
+The default output is `asc_out/`. Phone and tablet inputs are framed with Apple Frames and composited onto a generated background. Mac inputs are resized directly to the selected dimensions, which can change their aspect ratio; they do not receive frames, backgrounds or captions. The CLI still checks for Apple Frames before any screenshot build, including Mac-only builds. Existing generated folders named `asc_out` and `_framed` are excluded from source discovery.
 
 Choose a device lane and output options explicitly:
 
@@ -75,7 +88,7 @@ asc-screens ./source --copy-file copy.json --locale en-GB --template title-top
 
 Without a copy file, caption templates use the source filename as the title and remove a trailing `-ipad` or `-iphone` suffix. `plain` does not render copy text.
 
-## Repeatable configuration
+### Repeatable configuration
 
 Use JSON when paths and options should be recorded in a project file:
 
@@ -98,7 +111,7 @@ asc-screens --config asc-screens.json
 
 Relative `source`, `output_root`, and `copy_file` paths are resolved relative to the configuration file.
 
-## Guided mode
+### Guided mode
 
 Guided mode is available from a checkout with:
 
@@ -108,7 +121,7 @@ Guided mode is available from a checkout with:
 
 It prompts for the source directory, build or check mode, device lane, background, copy file, template, locale, and output directory. The installed `asc-gen` command invokes the same guided wrapper. It is interactive and does not provide a separate noninteractive help flow.
 
-## Output and validation
+### Output and validation
 
 Images go under `asc_out/<family>/`, or `asc_out/<locale>/<family>/` with locale copy. Framing intermediates go under `_framed` within the build root. Builds that produce images also write:
 
@@ -132,7 +145,7 @@ Validation accepts PNG, JPG, and JPEG files only. It checks the local target tab
 
 Inspect the output count and contact sheet after a run. Some frame or composite failures are skipped; inputs with the same filename stem can overwrite each other. The renderer does not clear old output files. Local checks do not establish current App Store submission acceptance.
 
-## App-preview video
+### App-preview video
 
 Convert an MP4 to a silent, App Store-oriented preview video with `ffmpeg`:
 
@@ -142,7 +155,7 @@ asc-screens --preview input.mp4 --output-root asc_out
 
 The defaults are `886x1920`, 30 fps, and a maximum duration of 30 seconds. The encoder replaces source audio with silent AAC and resizes the video to the requested dimensions. Use `--preview-size WIDTHxHEIGHT`, `--preview-fps`, and `--preview-max-duration` to change them. The output is written under `asc_out/video/` with a filename that records the selected constraints.
 
-## CI upload handoff
+### CI upload handoff
 
 `asc-screens-ci` fingerprints configured design inputs and skips work when a matching local cache marker exists. On a cache miss it runs `asc-screens --config ...`, reads `asc_upload.json`, validates `asc` authentication, finds the configured App Store version and locale, then delegates screenshot upload to the external `asc` CLI with `--replace`.
 
@@ -165,9 +178,9 @@ Print the cache key without building or uploading:
 asc-screens-ci --config .asc-screens-ci.json --fingerprint-only
 ```
 
-Normal runs require an already authenticated `asc` installation and replace remote screenshot sets on a cache miss. Read the configuration, cache and CI integration details in [`docs/asc-upload-ci.md`](./docs/asc-upload-ci.md).
+Normal runs require an already authenticated `asc` installation and replace remote screenshot sets on a cache miss. Read the configuration, cache and CI integration details in [`docs/asc-upload-ci.md`](docs/asc-upload-ci.md).
 
-## Development
+### Development
 
 Run the test suite from the checkout:
 
@@ -184,21 +197,21 @@ python3 asc_screens_ci.py --help
 
 Tests cover Python behavior and mocked external commands. Rendering changes also need a local run and visual review; upload compatibility needs separate verification with the intended external CLI.
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for contribution guidance and [`SUPPORT.md`](./SUPPORT.md) for support information.
+## Documentation
 
-## Legal and security
+- [docs/index.md](docs/index.md) — documentation index
+- [docs/asc-upload-ci.md](docs/asc-upload-ci.md) — CI workflow and external upload commands
+- [CHANGELOG.md](CHANGELOG.md) — release notes and the unreleased change set
+- [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) — contribution guidance
+- [.github/SUPPORT.md](.github/SUPPORT.md) — support guidance
+- [.github/SECURITY.md](.github/SECURITY.md) — security policy
+- [docs/legal/trademarks.md](docs/legal/trademarks.md) — trademark notices
+- [docs/legal/third-party-notices.md](docs/legal/third-party-notices.md) — licensing and third-party tool summary
 
-`asc-screens` is licensed under the MIT License. Copyright © 2026 Magrathean UK Ltd. See [`LICENSE`](./LICENSE) for the complete license text and [`license.md`](./license.md) for the project and dependency summary.
+## Licence
 
-App Store, App Store Connect, Apple, the Apple logo, iPhone, and iPad are trademarks of Apple Inc. Magrathean and `asc-screens` are trademarks of Magrathean UK Ltd. See [`TRADEMARKS.md`](./TRADEMARKS.md). `asc-screens` is not affiliated with or endorsed by Apple Inc., Apple Frames, ImageMagick Studio LLC, or `appshots`.
+asc-screens is open source under the MIT licence. See [LICENSE](LICENSE).
 
-Report security issues using the route and information in [`SECURITY.md`](./SECURITY.md). This project handles local image and video paths and delegates optional App Store Connect operations to external tools; do not place credentials or private keys in source inputs, config files, generated manifests, or issue reports.
+asc-screens is independent. It is not affiliated with, endorsed by or supported by Apple Inc., Apple Frames, ImageMagick Studio LLC or `appshots`.
 
-## Further reading
-
-- [`docs/asc-upload-ci.md`](./docs/asc-upload-ci.md), CI workflow and external upload commands
-- [`RELEASES.md`](./RELEASES.md), release notes and the unreleased change set
-- [`license.md`](./license.md), licensing summary
-- [`SECURITY.md`](./SECURITY.md), security policy
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md), contribution guidance
-- [`SUPPORT.md`](./SUPPORT.md), support guidance
+<sub>© 2026 MAGRATHEAN UK LTD · [Legal](https://github.com/magrathean-uk/.github/blob/main/LEGAL.md)</sub>
