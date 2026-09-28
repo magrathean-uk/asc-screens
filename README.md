@@ -28,10 +28,13 @@ asc-screens frames phone and tablet captures, scales Mac captures, adds optional
 
 Requirements:
 
-- Python 3.10 or later
+- Python 3.11 or later
 - ImageMagick, with `magick` on `PATH`
 - Apple Frames CLI, with `frames` on `PATH` or supplied with `--frames-bin`
 - `ffmpeg` on `PATH`, for App-preview video generation only
+
+The minimum is Python 3.11 because Python 3.10 reaches its scheduled end of
+support in October 2026.
 
 Clone or otherwise obtain a checkout, then run from that checkout:
 

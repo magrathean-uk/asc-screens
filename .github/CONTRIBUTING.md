@@ -6,7 +6,7 @@ explicit upload handoff. Read the [README](../README.md) for user flows and
 
 ## Local setup
 
-Use Python 3.10 or later. From a checkout:
+Use Python 3.11 or later. From a checkout:
 
 ```bash
 python3 -m venv .venv
