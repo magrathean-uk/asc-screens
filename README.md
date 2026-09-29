@@ -36,10 +36,12 @@ Requirements:
 The minimum is Python 3.11 because Python 3.10 reaches its scheduled end of
 support in October 2026.
 
-Clone or otherwise obtain a checkout, then run from that checkout:
+Clone or otherwise obtain a checkout, then run from that checkout. The virtual environment keeps the install inside the checkout instead of a user-level Python location:
 
 ```bash
-python3 -m pip install -e .
+python3 -m venv .venv
+. .venv/bin/activate
+clean-development run --session session-only -- python3 -m pip install -e .
 ```
 
 The editable install registers three commands: `asc-screens`, `asc-gen`, and `asc-screens-ci`. ImageMagick, Apple Frames and FFmpeg are external tools and must be installed separately.
@@ -184,6 +186,8 @@ asc-screens-ci --config .asc-screens-ci.json --fingerprint-only
 Normal runs require an already authenticated `asc` installation and replace remote screenshot sets on a cache miss. Read the configuration, cache and CI integration details in [`docs/asc-upload-ci.md`](docs/asc-upload-ci.md).
 
 ### Development
+
+This project follows [Clean Development](https://github.com/magrathean-uk/clean-development): run installs, builds and tests through `clean-development run --session session-only -- <command>` so no tool state is created under `~`. See the Clean development section of [AGENTS.md](AGENTS.md).
 
 Run the test suite from the checkout:
 

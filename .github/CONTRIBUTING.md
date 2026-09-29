@@ -11,16 +11,19 @@ Use Python 3.11 or later. From a checkout:
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-python3 -m pip install -e .
+clean-development run --session session-only -- python3 -m pip install -e .
 ```
 
 Do not commit the virtual environment or generated package metadata. Install
 external rendering tools separately as described in the README. The unit tests
 use the Python standard library and mock rendering and upload commands.
 
-For optional cache management, consider
-[Clean Development](https://github.com/magrathean-uk/clean-development).
-It is not required to contribute.
+This project follows
+[Clean Development](https://github.com/magrathean-uk/clean-development):
+installs, builds and tests run through
+`clean-development run --session session-only -- <command>`, and no tool state
+is created under `~`. The commands below are shown without that wrapper for
+brevity. See the Clean development section of [AGENTS.md](../AGENTS.md).
 
 ## Verification
 
