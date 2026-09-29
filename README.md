@@ -30,7 +30,7 @@ Requirements:
 
 - Python 3.11 or later
 - ImageMagick, with `magick` on `PATH`
-- Apple Frames CLI, with `frames` on `PATH` or supplied with `--frames-bin`
+- Apple Frames CLI, with `frames` on `PATH`, or supplied with `--frames-bin` or the `ASC_SCREENS_FRAMES_BIN` environment variable
 - `ffmpeg` on `PATH`, for App-preview video generation only
 
 The minimum is Python 3.11 because Python 3.10 reaches its scheduled end of

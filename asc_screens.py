@@ -2,6 +2,7 @@
 import argparse
 import colorsys
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -68,6 +69,7 @@ EXPORT_TARGETS = {
     "all-latest": [("iphone", TARGETS["iphone"]), ("ipad", TARGETS["ipad"]), ("mac", TARGETS["mac"])],
 }
 
+FRAMES_BIN_ENV = "ASC_SCREENS_FRAMES_BIN"
 DEFAULT_BACKGROUND = ["#060914", "#1A26FF", "#20D7E8"]
 GENERATED_DIR_NAMES = {"_framed", "asc_out"}
 SCREENSHOT_EXTENSIONS = {".png", ".jpg", ".jpeg", ".heic", ".heif", ".tif", ".tiff"}
@@ -99,6 +101,29 @@ class ValidationSummary:
     passed: int
     failed: int
     reports: tuple[ValidationReport, ...]
+
+
+def default_frames_bin():
+    """Apple Frames CLI to use unless --frames-bin says otherwise: $ASC_SCREENS_FRAMES_BIN, else `frames` on PATH."""
+    return os.environ.get(FRAMES_BIN_ENV, "").strip() or "frames"
+
+
+def find_frames_bin(value=None):
+    """Resolve the Apple Frames CLI from an explicit path, the environment default or PATH. None if missing."""
+    requested = str(value or default_frames_bin())
+    if os.sep in requested or requested.startswith("~"):
+        path = Path(requested).expanduser()
+        if path.exists():
+            return path
+    found = shutil.which(requested) or shutil.which("frames")
+    return Path(found) if found else None
+
+
+def require_frames_bin(value=None):
+    found = find_frames_bin(value)
+    if found is None:
+        raise SystemExit(f"Need Apple Frames CLI: put frames on PATH, set {FRAMES_BIN_ENV}, or pass --frames-bin")
+    return found
 
 
 def target_for_kind(kind):
@@ -770,7 +795,11 @@ def main():
     parser.add_argument("source", nargs="?", default=".", help="Folder with iphone/ and ipad/ inside, or mixed PNGs.")
     parser.add_argument("--config", help="JSON config file for repeatable runs.")
     parser.add_argument("--output-root", default="asc_out", help="Output folder.")
-    parser.add_argument("--frames-bin", default=str(Path.home() / ".local/bin/frames"))
+    parser.add_argument(
+        "--frames-bin",
+        default=default_frames_bin(),
+        help=f"Apple Frames CLI. Default: ${FRAMES_BIN_ENV} if set, otherwise `frames` on PATH.",
+    )
     parser.add_argument("--background", help="1 hex color or 3 hex colors, comma or space separated.")
     parser.add_argument("--theme", choices=["teslatlas", "purple"], default="teslatlas")
     parser.add_argument("--frame-color", default="Silver")
@@ -818,14 +847,7 @@ def main():
     if args.check:
         raise SystemExit(validate_existing_images(args.source))
 
-    frames_bin = Path(args.frames_bin)
-    if not frames_bin.exists():
-        found = shutil.which("frames")
-        if found:
-            frames_bin = Path(found)
-        else:
-            raise SystemExit("Need Apple Frames CLI at --frames-bin or on PATH")
-    args.frames_bin = str(frames_bin)
+    args.frames_bin = str(require_frames_bin(args.frames_bin))
 
     jobs = collect_jobs(args.source)
     if not jobs:

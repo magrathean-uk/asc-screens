@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-import shutil
 from argparse import Namespace
 from pathlib import Path
 
 from asc_screens import (
     collect_jobs,
     process_kind,
+    require_frames_bin,
     resolve_background_palette,
     resolve_localized_builds,
     validate_existing_images,
@@ -65,16 +65,6 @@ def ask(prompt, default=None):
     suffix = f" [{default}]" if default else ""
     value = input(f"{prompt}{suffix}: ").strip()
     return value or default
-
-
-def find_frames_bin():
-    home_bin = Path.home() / ".local/bin/frames"
-    if home_bin.exists():
-        return home_bin
-    found = shutil.which("frames")
-    if found:
-        return Path(found)
-    raise SystemExit("Need Apple Frames CLI at ~/.local/bin/frames or on PATH")
 
 
 def prompt_kinds(jobs):
@@ -150,7 +140,7 @@ def main():
     print(f"Theme: {', '.join(background_colors)}")
     args = Namespace(
         output_root=output_root,
-        frames_bin=str(find_frames_bin()),
+        frames_bin=str(require_frames_bin()),
         frame_color="Silver",
         validate=True,
     )

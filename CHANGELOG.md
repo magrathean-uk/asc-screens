@@ -5,6 +5,9 @@ records behavior present in the checkout; it does not identify a published relea
 
 ## Unreleased
 
+- The Apple Frames CLI is found through `--frames-bin`, the
+  `ASC_SCREENS_FRAMES_BIN` environment variable or `PATH`. The built-in
+  `~/.local/bin/frames` default is gone, and `asc-gen` uses the same lookup.
 - iPhone export uses the largest portrait size in the local target table,
   `1320x2868`.
 - Built-in checks cover image format, configured dimensions and PNG transparency.

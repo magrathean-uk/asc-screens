@@ -18,7 +18,7 @@ security issues using the subject and route in [SECURITY.md](SECURITY.md).
 | Symptom | What to check |
 | --- | --- |
 | `Need ImageMagick` | Confirm `magick` is available on `PATH`. |
-| Apple Frames CLI not found | Provide `--frames-bin` to `asc-screens`, or make `frames` available on `PATH`. Even Mac-only screenshot builds currently check for it. |
+| Apple Frames CLI not found | Provide `--frames-bin` to `asc-screens`, set `ASC_SCREENS_FRAMES_BIN`, or make `frames` available on `PATH`. Even Mac-only screenshot builds currently check for it. |
 | No screenshots found | Use a supported image format and a directory outside paths named `asc_out` or `_framed`, which discovery excludes. |
 | Some inputs are ignored | If named `iphone`, `ipad` or `mac` subdirectories exist, discovery uses those directories rather than loose mixed inputs. |
 | Unexpected family or size | Mixed-folder detection uses aspect ratio. Prefer separate device folders for rendering and inspect the result. |

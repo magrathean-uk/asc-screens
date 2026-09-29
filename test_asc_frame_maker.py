@@ -1,5 +1,6 @@
 import unittest
 import json
+import os
 from pathlib import Path
 from subprocess import CalledProcessError
 from tempfile import TemporaryDirectory
@@ -16,6 +17,8 @@ from asc_screens import (
     collect_jobs,
     derive_background_palette,
     expand_export_targets,
+    default_frames_bin,
+    find_frames_bin,
     fit_inside,
     expand_background_palette,
     list_pngs,
@@ -33,6 +36,7 @@ from asc_screens import (
     process_app_preview,
     process_kind,
     process_mac,
+    require_frames_bin,
     target_for_kind,
     validate_output_dir,
     validate_screenshot_file,
@@ -127,6 +131,43 @@ class AscFrameMakerTests(unittest.TestCase):
     def test_expand_kind_selection_for_mac(self):
         self.assertEqual(expand_export_targets("mac"), [("mac", (2880, 1800))])
 
+    def test_default_frames_bin_is_path_lookup_without_environment(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ASC_SCREENS_FRAMES_BIN", None)
+            self.assertEqual(default_frames_bin(), "frames")
+
+    def test_default_frames_bin_uses_environment(self):
+        with patch.dict(os.environ, {"ASC_SCREENS_FRAMES_BIN": "/opt/apple-frames/bin/frames"}):
+            self.assertEqual(default_frames_bin(), "/opt/apple-frames/bin/frames")
+
+    def test_find_frames_bin_prefers_existing_explicit_path(self):
+        with TemporaryDirectory() as tmp:
+            frames = Path(tmp) / "frames"
+            frames.touch()
+
+            with patch("asc_screens.shutil.which", return_value="/usr/bin/frames"):
+                self.assertEqual(find_frames_bin(str(frames)), frames)
+
+    def test_find_frames_bin_falls_back_to_path_lookup(self):
+        with patch("asc_screens.shutil.which", return_value="/usr/local/bin/frames"):
+            self.assertEqual(find_frames_bin("/no/such/dir/frames"), Path("/usr/local/bin/frames"))
+            self.assertEqual(find_frames_bin("frames"), Path("/usr/local/bin/frames"))
+
+    def test_find_frames_bin_reads_environment_default(self):
+        with TemporaryDirectory() as tmp:
+            frames = Path(tmp) / "frames"
+            frames.touch()
+
+            with patch.dict(os.environ, {"ASC_SCREENS_FRAMES_BIN": str(frames)}):
+                self.assertEqual(find_frames_bin(), frames)
+
+    def test_require_frames_bin_exits_when_missing(self):
+        with patch("asc_screens.shutil.which", return_value=None):
+            with self.assertRaises(SystemExit) as raised:
+                require_frames_bin("frames")
+
+        self.assertIn("ASC_SCREENS_FRAMES_BIN", str(raised.exception))
+
     def test_load_config_reads_json_file(self):
         with TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "asc-screens.json"
@@ -141,7 +182,7 @@ class AscFrameMakerTests(unittest.TestCase):
         args = Namespace(
             source=".",
             output_root="asc_out",
-            frames_bin="/Users/test/.local/bin/frames",
+            frames_bin="/opt/apple-frames/bin/frames",
             background=None,
             theme="teslatlas",
             frame_color="Silver",
@@ -153,7 +194,7 @@ class AscFrameMakerTests(unittest.TestCase):
         defaults = {
             "source": ".",
             "output_root": "asc_out",
-            "frames_bin": "/Users/test/.local/bin/frames",
+            "frames_bin": "/opt/apple-frames/bin/frames",
             "background": None,
             "theme": "teslatlas",
             "frame_color": "Silver",
