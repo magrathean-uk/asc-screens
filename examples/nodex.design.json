@@ -1,0 +1,11 @@
+{
+  "app_name": "Nodex",
+  "title": "Your servers.\nIn sight.",
+  "subtitle": "Linux monitoring over direct SSH.",
+  "detail": "Metrics · services · containers",
+  "style": "light",
+  "layout": "hero",
+  "media_kind": "iphone",
+  "finish": "studio",
+  "icon": "../../Nodex/icons/Icon-iOS-Default-1024x1024@1x.png"
+}

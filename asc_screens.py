@@ -11,6 +11,8 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
+from asc_creative import CREATIVE_PROFILES, check_creative_assets, load_creative_design, process_creative_assets
+
 
 APP_STORE_IPHONE_TARGETS = (
     (1242, 2688),
@@ -53,9 +55,9 @@ FRAME_FIT = {
 }
 
 TEMPLATES = {
-    "plain": {"gravity": None, "title_offset": None, "subtitle_offset": None},
-    "title-top": {"gravity": "north", "title_offset": "+0+180", "subtitle_offset": "+0+320"},
-    "title-bottom": {"gravity": "south", "title_offset": "+0+320", "subtitle_offset": "+0+180"},
+    "plain": {"gravity": None},
+    "title-top": {"gravity": "north"},
+    "title-bottom": {"gravity": "south"},
 }
 
 EXPORT_TARGETS = {
@@ -85,6 +87,23 @@ FONT_CANDIDATES = (
 class ImageJob:
     source: Path
     device: str
+
+
+@dataclass(frozen=True)
+class CaptionLayer:
+    text: str
+    pointsize: int
+    width: int
+    height: int
+    top: int
+    font: str | None
+
+
+@dataclass(frozen=True)
+class CaptionLayout:
+    layers: tuple[CaptionLayer, ...]
+    frame_top: int
+    frame_bottom: int
 
 
 @dataclass(frozen=True)
@@ -386,11 +405,19 @@ def composite(kind, source, framed, output_dir, background_colors, target_size=N
     target_w, target_h = target_size or target_for_kind(kind)
     max_w, max_h = FRAME_FIT[kind]
     framed_w, framed_h = image_size(framed)
-    fit_w, fit_h = fit_inside((framed_w, framed_h), (max_w, max_h))
     if copy is None:
         copy = {"title": title_from_source(source), "subtitle": ""}
     else:
         copy = copy or {"title": "", "subtitle": ""}
+    layout = caption_layout(target_w, target_h, template, copy)
+    fit_w, fit_h = fit_inside(
+        (framed_w, framed_h),
+        (min(max_w, target_w), min(max_h, layout.frame_bottom - layout.frame_top)),
+    )
+    frame_placement = ["-gravity", "center"]
+    if layout.layers:
+        frame_top = layout.frame_top + (layout.frame_bottom - layout.frame_top - fit_h) // 2
+        frame_placement = ["-gravity", "north", "-geometry", f"+0+{frame_top}"]
 
     output_dir.mkdir(parents=True, exist_ok=True)
     output = output_path_for_source(output_dir, source)
@@ -398,7 +425,7 @@ def composite(kind, source, framed, output_dir, background_colors, target_size=N
         [
             "magick",
             *background_command(target_w, target_h, background_colors),
-            *overlay_text_command(target_w, target_h, template, copy),
+            *overlay_text_command(target_w, target_h, template, copy, layout=layout),
             "(",
             str(framed),
             "-filter",
@@ -408,8 +435,7 @@ def composite(kind, source, framed, output_dir, background_colors, target_size=N
             "-resize",
             f"{fit_w}x{fit_h}!",
             ")",
-            "-gravity",
-            "center",
+            *frame_placement,
             "-composite",
             "-alpha",
             "off",
@@ -449,6 +475,8 @@ def process_kind(args, jobs, kind, background_colors, target_size=None, template
             if copy:
                 kwargs["copy"] = copy
             outputs.append(composite(kind, source, frame, output_dir, background_colors, **kwargs))
+        except ValueError as exc:
+            raise SystemExit(f"Cannot compose {source}: {exc}") from exc
         except subprocess.CalledProcessError as exc:
             detail = exc.stderr.strip() if getattr(exc, "stderr", None) else "composite command failed"
             print(f"Skip {source}: {detail}", file=sys.stderr)
@@ -598,7 +626,7 @@ def resolve_configured_args(args, config, defaults):
 def resolve_config_paths(args, config_path):
     resolved = argparse.Namespace(**vars(args))
     config_dir = Path(config_path).expanduser().resolve().parent
-    for key in ("source", "output_root", "copy_file"):
+    for key in ("source", "output_root", "copy_file", "preview", "design_file"):
         value = getattr(resolved, key, None)
         if not value:
             continue
@@ -634,51 +662,70 @@ def wrap_caption(text, width):
     return "\n".join(lines) if lines else text
 
 
-def overlay_text_command(width, height, template, copy):
-    template_spec = TEMPLATES[template]
-    title = copy.get("title", "").strip()
-    subtitle = copy.get("subtitle", "").strip()
-    if template_spec["gravity"] is None or (not title and not subtitle):
-        return []
+def caption_image_command(text, width, pointsize, font):
+    command = ["-background", "none", "-fill", "#FFFFFF", "-gravity", "center"]
+    if font:
+        command.extend(["-font", font])
+    return command + ["-pointsize", str(pointsize), "-size", f"{width}x", f"caption:{text}"]
+
+
+def measure_caption(text, width, pointsize, font):
+    """Use the same ImageMagick caption settings as rendering, including font wrapping."""
+    result = subprocess.run(
+        ["magick", *caption_image_command(text, width, pointsize, font), "-format", "%h", "info:"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return int(result.stdout.strip())
+
+
+def caption_layout(width, height, template, copy, measure=None):
+    """Reserve disjoint caption and frame regions using actual rendered text heights."""
+    if TEMPLATES[template]["gravity"] is None:
+        return CaptionLayout((), 0, height)
+    measure = measure or measure_caption
+    margin = max(1, round(min(width, height) * 0.06))
+    text_width = max(1, width - 2 * margin)
+    text_gap = max(1, round(width * 0.02))
+    frame_gap = max(1, round(width * 0.04))
     font = default_font()
-    text_width = max(1, width - 160)
+    measured = []
+    for key, wrap_width, single_factor, wrapped_factor in (
+        ("title", 26, 0.055, 0.046),
+        ("subtitle", 34, 0.032, 0.028),
+    ):
+        text = copy.get(key, "").strip()
+        if not text:
+            continue
+        text = wrap_caption(text, wrap_width)
+        pointsize = max(1, round(width * (wrapped_factor if "\n" in text else single_factor)))
+        measured.append((text, pointsize, measure(text, text_width, pointsize, font)))
+    if not measured:
+        return CaptionLayout((), 0, height)
+    block_height = sum(item[2] for item in measured) + text_gap * (len(measured) - 1)
+    if block_height + 2 * margin + frame_gap >= height:
+        raise ValueError("Captions leave no room for the device frame; shorten the title or subtitle.")
+    top = margin if template == "title-top" else height - margin - block_height
+    layers = []
+    for text, pointsize, text_height in measured:
+        layers.append(CaptionLayer(text, pointsize, text_width, text_height, top, font))
+        top += text_height + text_gap
+    if template == "title-top":
+        return CaptionLayout(tuple(layers), margin + block_height + frame_gap, height - margin)
+    return CaptionLayout(tuple(layers), margin, layers[0].top - frame_gap)
 
-    def text_layer(text, wrap_width, pointsize_factor, wrapped_pointsize_factor, offset):
-        wrapped_text = wrap_caption(text, wrap_width)
-        pointsize_factor = wrapped_pointsize_factor if "\n" in wrapped_text else pointsize_factor
-        layer = [
-            "(",
-            "-background",
-            "none",
-            "-fill",
-            "#FFFFFF",
-            "-gravity",
-            "center",
-        ]
-        if font:
-            layer.extend(["-font", font])
-        layer.extend(
-            [
-                "-pointsize",
-                str(round(width * pointsize_factor)),
-                "-size",
-                f"{text_width}x",
-                f"caption:{wrapped_text}",
-                ")",
-                "-gravity",
-                template_spec["gravity"],
-                "-geometry",
-                offset,
-                "-composite",
-            ]
-        )
-        return layer
 
+def overlay_text_command(width, height, template, copy, layout=None):
+    layout = layout or caption_layout(width, height, template, copy)
+    gravity = TEMPLATES[template]["gravity"]
     command = []
-    if title:
-        command.extend(text_layer(title, 26, 0.055, 0.046, template_spec["title_offset"]))
-    if subtitle:
-        command.extend(text_layer(subtitle, 34, 0.032, 0.028, template_spec["subtitle_offset"]))
+    for layer in layout.layers:
+        offset = layer.top if gravity == "north" else height - layer.top - layer.height
+        command.extend([
+            "(", *caption_image_command(layer.text, layer.width, layer.pointsize, layer.font), ")",
+            "-gravity", gravity, "-geometry", f"+0+{offset}", "-composite",
+        ])
     return command
 
 
@@ -791,8 +838,9 @@ def prompt_for_background(default_palette):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Make framed App Store Connect screenshots.")
-    parser.add_argument("source", nargs="?", default=".", help="Folder with iphone/ and ipad/ inside, or mixed PNGs.")
+    explicit_options = {value.partition("=")[0] for value in sys.argv[1:] if value.startswith("--")}
+    parser = argparse.ArgumentParser(description="Make App Store Connect screenshots and creative assets locally.")
+    parser.add_argument("source", nargs="?", default=".", help="Screenshot folder, or creative artwork/video file or folder.")
     parser.add_argument("--config", help="JSON config file for repeatable runs.")
     parser.add_argument("--output-root", default="asc_out", help="Output folder.")
     parser.add_argument(
@@ -806,12 +854,22 @@ def main():
     parser.add_argument("--kind", choices=sorted(EXPORT_TARGETS), default="all")
     parser.add_argument("--template", choices=sorted(TEMPLATES), default="plain")
     parser.add_argument("--copy-file", help="JSON file with locale -> {title, subtitle}.")
-    parser.add_argument("--locale", help="Build one locale from the copy file.")
+    parser.add_argument("--locale", help="Select screenshot copy locale or label a creative export.")
+    parser.add_argument("--asset", choices=["screenshots", *CREATIVE_PROFILES, "creative-all"], default="screenshots",
+                        help="Export header/search/universal or In-App Event artwork instead of screenshots.")
+    parser.add_argument("--asset-fit", choices=["contain", "cover"], default="contain",
+                        help="Preserve the source aspect ratio using padding or a centered crop.")
+    parser.add_argument("--design-file", help="JSON composition with app identity, headline, colours, and a complete product image.")
+    parser.add_argument("--asset-fps", type=int, choices=[30, 60], default=30)
+    parser.add_argument("--asset-max-duration", type=float, default=30,
+                        help="Trim creative videos to at most this many seconds (maximum 30).")
+    parser.add_argument("--asset-poster-time", type=float, default=0,
+                        help="Seconds into the exported video to select its poster image.")
     parser.add_argument("--preview", help="Build a Mac/iPhone app preview video from an MP4.")
     parser.add_argument("--preview-size", default="886x1920", help="Preview export size, for example 886x1920.")
     parser.add_argument("--preview-fps", type=int, default=30)
     parser.add_argument("--preview-max-duration", type=int, default=30)
-    parser.add_argument("--check", action="store_true", help="Validate existing screenshots without framing.")
+    parser.add_argument("--check", action="store_true", help="Validate existing screenshots or the selected creative profile.")
     parser.add_argument("--validate", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
     defaults = {
@@ -823,6 +881,37 @@ def main():
     if args.config:
         args = resolve_configured_args(args, load_config(args.config), defaults)
         args = resolve_config_paths(args, args.config)
+
+    if args.asset != "screenshots":
+        if args.preview:
+            parser.error("Choose --asset or --preview in one run.")
+        if args.copy_file or args.template != "plain":
+            parser.error("Creative exports use source artwork; caption templates and copy files apply to screenshots.")
+        try:
+            if args.check:
+                raise SystemExit(check_creative_assets(args.source, args.asset))
+            background = (parse_background_spec(args.background)[0] if args.background
+                          else resolve_background_palette(theme=args.theme)[0])
+            design = load_creative_design(args.design_file) if args.design_file else None
+            if design is not None:
+                if args.frames_bin != defaults["frames_bin"] or "--frames-bin" in explicit_options:
+                    design["frames_bin"] = args.frames_bin
+                if args.frame_color != defaults["frame_color"] or "--frame-color" in explicit_options:
+                    design["frame_color"] = args.frame_color
+            outputs = process_creative_assets(
+                args.source, args.output_root, args.asset, fit=args.asset_fit,
+                background=background, fps=args.asset_fps,
+                max_duration=args.asset_max_duration, poster_time=args.asset_poster_time,
+                locale=args.locale,
+                design=design,
+            )
+        except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as exc:
+            raise SystemExit(f"Creative export failed: {exc}") from exc
+        print(f"Done: {len(outputs)} creative assets; review {Path(args.output_root) / 'asc_creative_review.html'}")
+        return
+
+    if args.design_file:
+        parser.error("--design-file needs a creative --asset profile, such as header or creative-all.")
 
     if not shutil.which("magick"):
         raise SystemExit("Need ImageMagick: brew install imagemagick")

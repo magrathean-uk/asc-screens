@@ -1,0 +1,293 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-10-15",
+  "path_base": "This JSON directory; source paths are relative to portfolio.curated.json.",
+  "method": "Visual inspection of current local captures and source provenance, then editorial App Store positioning. No measured keyword volume, search ranks, conversion lift or live listing claims.",
+  "apple_references": [
+    "https://developer.apple.com/app-store/asset-best-practices/",
+    "https://developer.apple.com/app-store/product-page/"
+  ],
+  "criteria": [
+    "Lead with completed work or a populated result.",
+    "Include a category-intent noun so benefit is clear without knowing the name.",
+    "Reject setup/warning/blank/disconnected states as first image.",
+    "Preserve exact UI, use explicit source crop only.",
+    "Never nest an existing marketing device frame in another frame.",
+    "Keep capture gaps explicit."
+  ],
+  "apps": [
+    {
+      "id": "nodex",
+      "name": "Nodex",
+      "status": "ready_with_source_preference",
+      "search_intent": [
+        "Linux server monitoring",
+        "SSH monitor",
+        "Docker monitor",
+        "systemd services"
+      ],
+      "positioning": "Inspect Linux health, metrics history, systemd and Docker over direct SSH.",
+      "selected": [
+        {
+          "id": "hero",
+          "source": "../../Nodex/artifacts/appstore-screens-v4/raw/iphone/09-history.png",
+          "rationale": "Lead with populated metric trends. The overview, network and services captures show a sudo setup prompt; history explains the value immediately."
+        },
+        {
+          "id": "containers",
+          "source": "../../Nodex/artifacts/appstore-screens-v4/raw/iphone/07-docker.png",
+          "rationale": "Show actual container groups and running/stopped states as supporting evidence of Docker monitoring.",
+          "design": {
+            "title": "Know what’s\nrunning.",
+            "subtitle": "Inspect Docker containers and Compose groups.",
+            "detail": "Docker · Compose · container health"
+          },
+          "profiles": [
+            "search-results"
+          ]
+        }
+      ],
+      "rejected_leads": [
+        "Overview/network/services as hero show yellow Enable sudo for full stats prompt."
+      ],
+      "capture_gaps": [
+        "Website scenes are already framed marketing compositions. Prefer original raw captures.",
+        "Provenance checked 2026-09-30 is not proof of current live listing."
+      ],
+      "evidence": [
+        "../../magrathean/sites/nodex/app-website.json",
+        "../../magrathean/sites/nodex/app-pages.json",
+        "../../magrathean/sites/nodex/media-provenance.json"
+      ]
+    },
+    {
+      "id": "termex",
+      "name": "Termex",
+      "status": "usable_single_feature_capture_gap",
+      "search_intent": [
+        "SSH client",
+        "SFTP client",
+        "tmux",
+        "terminal for iPhone"
+      ],
+      "positioning": "SSH terminals, host-side tmux continuity and native SFTP.",
+      "selected": [
+        {
+          "id": "hero",
+          "source": "../../magrathean/sites/termex/public/assets/platforms/iphone/scene-2.webp",
+          "rationale": "An explicit feature excerpt shows active and verified SFTP rows. The full source also includes a failed transfer; this crop illustrates one feature, with demo data disclosed. A connected terminal capture is still needed.",
+          "crop": [
+            180,
+            530,
+            960,
+            790
+          ]
+        }
+      ],
+      "rejected_leads": [
+        "Terminal lead: almost blank and explicitly simulated, no live connection.",
+        "Settings lead: preference controls do not demonstrate working benefit."
+      ],
+      "capture_gaps": [
+        "No persuasive real terminal or running tmux screenshot in current set.",
+        "Sample SFTP transfer is only 37 bytes; no speed/scale claim.",
+        "Existing full transfer scene includes failed.tar/network lost. Crop does not alter UI state."
+      ],
+      "evidence": [
+        "../../magrathean/sites/termex/app-website.json",
+        "../../magrathean/sites/termex/app-pages.json",
+        "../../magrathean/sites/termex/media-provenance.json"
+      ]
+    },
+    {
+      "id": "codexex",
+      "name": "Codexex",
+      "status": "ready",
+      "search_intent": [
+        "Codex usage",
+        "Codex quota",
+        "reset timer",
+        "weekly allowance"
+      ],
+      "positioning": "Reported Codex allowance and reset timing with iPhone Live Activity.",
+      "selected": [
+        {
+          "id": "hero",
+          "source": "../../Codexex/AppStore/Screenshots/2026-10-ios/raw/iphone/01-quota.png",
+          "rationale": "The large reset clock and remaining allowance explain the product at a glance. Keep the sample-data disclosure from the original screenshot-set design."
+        },
+        {
+          "id": "history",
+          "source": "../../Codexex/AppStore/Screenshots/2026-10-ios/raw/iphone/03-history.png",
+          "rationale": "A declared crop enlarges the complete original chart card instead of shrinking a mostly empty screen. The UI data and plotted marks remain unchanged.",
+          "crop": [
+            64,
+            400,
+            1192,
+            750
+          ],
+          "design": {
+            "title": "See your\nusage pattern.",
+            "subtitle": "Review recorded peaks and usage history.",
+            "detail": "Local history · Sample data",
+            "media_kind": "image"
+          },
+          "profiles": [
+            "search-results"
+          ]
+        }
+      ],
+      "rejected_leads": [
+        "Live Activity lead: wallpaper dominates a small actual usage pill."
+      ],
+      "capture_gaps": [
+        "Say reported allowance; do not imply guaranteed quota, increased allowance or control of resets.",
+        "Scene names plus/pro are existing capture names, not a promise every account reports both windows.",
+        "Use a dark charcoal/navy background with a smooth gradient derived from the app icon’s blue/cyan colours. Preserve the original icon and quota UI colours.",
+        "Lead should show one complete native device screenshot beside a concise outcome. Avoid raw portrait cover crops for horizontal placements.",
+        "Retain Sample data disclosure from the existing screenshot-set design file for all marketing renders using these captures.",
+        "Raw iPhone images are 1320x2868; iPad images are 2064x2752. Captures are AppStore native preview data, not the Matrix HTML prototype."
+      ],
+      "evidence": [
+        "../../magrathean/sites/codexex/app-website.json",
+        "../../magrathean/sites/codexex/app-pages.json",
+        "../../magrathean/sites/codexex/media-provenance.json"
+      ]
+    },
+    {
+      "id": "tesatlas",
+      "name": "Tesatlas",
+      "status": "ready_current_renamed_capture",
+      "search_intent": [
+        "TeslaMate",
+        "Tesla driving history",
+        "charging history",
+        "energy history"
+      ],
+      "positioning": "Explore TeslaMate/MyTeslaMate drive, charging and energy records locally.",
+      "selected": [
+        {
+          "id": "hero",
+          "source": "../../magrathean/sites/teslatlas/public/assets/screens/v6/platforms/iphone/iphone-drive-details.webp",
+          "rationale": "Use the current renamed 6.5.1 build 35 capture. The route map, distance, energy and recorded cost tell a clearer story than capacity tiles. Crop removes existing marketing captions and keeps the full native viewport.",
+          "crop": [
+            170,
+            600,
+            980,
+            2130
+          ]
+        },
+        {
+          "id": "trips",
+          "source": "../../magrathean/sites/teslatlas/public/assets/screens/v6/platforms/iphone/iphone-trips.webp",
+          "rationale": "Multiple routes and period totals extend the story from one drive to a useful history. Retain the full native viewport.",
+          "crop": [
+            170,
+            600,
+            980,
+            2130
+          ],
+          "design": {
+            "title": "Your journeys.\nConnected.",
+            "subtitle": "Explore routes and totals across your trips.",
+            "detail": "Routes · energy · Demo data"
+          },
+          "profiles": [
+            "search-results"
+          ]
+        }
+      ],
+      "rejected_leads": [
+        "Battery hero: 100% estimate and capacity tiles do not show a meaningful trend.",
+        "Charge detail hero: tiny 2kWh/0h5m example is weaker than route map."
+      ],
+      "capture_gaps": [
+        "Current marketing name is Tesatlas; repo/site/icon filenames still use teslatlas.",
+        "Active provenance is 6.5.1 build35 captured 2026-10-15; older 6.1 records superseded.",
+        "Existing images include dark marketing captions; prefer original raw sources identified in provenance.",
+        "Costs depend on source records; no automatic savings or complete bill reconstruction claim."
+      ],
+      "evidence": [
+        "../../magrathean/sites/teslatlas/app-website.json",
+        "../../magrathean/sites/teslatlas/app-pages.json",
+        "../../magrathean/sites/teslatlas/media-provenance.json"
+      ]
+    },
+    {
+      "id": "tescam",
+      "name": "Tescam",
+      "status": "capture_gap_controls_only",
+      "search_intent": [
+        "Tesla dashcam viewer",
+        "TeslaCam",
+        "dashcam export",
+        "video trim"
+      ],
+      "positioning": "Review synchronised Tesla dashcam views, select range and export locally.",
+      "selected": [
+        {
+          "id": "hero",
+          "source": "../../tescam/marketing/screenshots/raw/iphone/05-export.png",
+          "rationale": "The exact camera-selection and codec/export controls make a useful feature image. Existing near-white synthetic camera tiles are weak proof of playback; capture meaningful footage before a footage-led campaign.",
+          "crop": [
+            32,
+            1630,
+            1256,
+            1130
+          ]
+        }
+      ],
+      "rejected_leads": [
+        "Overview/playback hero: pale synthetic six-camera tiles look like blank placeholders."
+      ],
+      "capture_gaps": [
+        "Provenance declares synthetic demo footage, not user footage.",
+        "Needs a meaningful real or clearly labelled demo capture for footage-led marketing.",
+        "Existing phone images already include captions/device framing; prefer raw capture or preserve complete composition."
+      ],
+      "evidence": [
+        "../../magrathean/sites/tescam/app-website.json",
+        "../../magrathean/sites/tescam/app-pages.json",
+        "../../magrathean/sites/tescam/media-provenance.json"
+      ]
+    }
+  ],
+  "excluded": [
+    {
+      "id": "capturex",
+      "reason": "iOS/macOS product exists, but no actual app screenshots were found in the repo, and README identifies internal use with no public listing. Needs deliberate native capture before generation."
+    },
+    {
+      "id": "claudexex",
+      "reason": "iPhone/iPad companion exists, but no native screenshot set found. Only Matrix prototype QA images and icons. Do not pass the prototype off as current native UI. Website inventory may supply real captures separately."
+    },
+    {
+      "id": "findr",
+      "reason": "README and target describe macOS-only app; excluded from iOS generation."
+    },
+    {
+      "id": "magracal",
+      "reason": "README describes macOS-only app, built locally, not App Store distributed; excluded from iOS generation."
+    },
+    {
+      "id": "foldnex",
+      "reason": "Chrome extension, not iOS app. Existing store screenshots are Chrome Web Store media."
+    },
+    {
+      "id": "uncordex",
+      "reason": "Native macOS controller/LaunchAgent, not iOS app."
+    },
+    {
+      "id": "spacexex",
+      "reason": "Research and paper-execution system with operator dashboard, not iOS app."
+    },
+    {
+      "id": "auditex",
+      "reason": "Desktop CLI, outside the iOS creative rollout."
+    },
+    {
+      "id": "viceden",
+      "reason": "Web forum, not an iOS product."
+    }
+  ]
+}

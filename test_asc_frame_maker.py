@@ -13,6 +13,7 @@ from asc_screens import (
     app_preview_output_path,
     background_command,
     build_app_preview_command,
+    caption_layout,
     classify_device_from_size,
     collect_jobs,
     derive_background_palette,
@@ -289,7 +290,8 @@ class AscFrameMakerTests(unittest.TestCase):
         self.assertEqual(localizations["de-DE"]["subtitle"], "Route, laden, ankommen")
 
     def test_overlay_text_command_uses_bottom_template(self):
-        command = overlay_text_command(1320, 2868, "title-bottom", {"title": "Fast EV planning", "subtitle": "Route, charge, arrive"})
+        with patch("asc_screens.measure_caption", return_value=90):
+            command = overlay_text_command(1320, 2868, "title-bottom", {"title": "Fast EV planning", "subtitle": "Route, charge, arrive"})
 
         self.assertIn("-gravity", command)
         self.assertIn("south", command)
@@ -297,15 +299,82 @@ class AscFrameMakerTests(unittest.TestCase):
         self.assertTrue(any("Route, charge, arrive" in part for part in command))
 
     @patch("asc_screens.run")
-    @patch("asc_screens.overlay_text_command", side_effect=lambda width, height, template, copy: [copy["title"]])
+    @patch("asc_screens.measure_caption", return_value=90)
     @patch("asc_screens.background_command", return_value=[])
     @patch("asc_screens.image_size", return_value=(100, 200))
     @patch("asc_screens.fit_inside", return_value=(100, 200))
-    def test_composite_uses_filename_title_when_copy_missing(self, _fit_inside, _image_size, _background_command, _overlay_text_command, run_mock):
-        composite("iphone", Path("launch-screen-ipad.png"), Path("frame.png"), Path("out"), ["#000000", "#111111", "#222222"], template="title-top")
+    def test_composite_uses_filename_title_when_copy_missing(self, _fit_inside, _image_size, _background_command, _measure_caption, run_mock):
+        with TemporaryDirectory() as tmp:
+            composite("iphone", Path("launch-screen-ipad.png"), Path("frame.png"), Path(tmp), ["#000000", "#111111", "#222222"], template="title-top")
 
         command = run_mock.call_args.args[0]
-        self.assertIn("launch-screen", command)
+        self.assertIn("caption:launch-screen", command)
+
+    def test_captioned_composites_keep_wrapped_text_and_frames_disjoint(self):
+        copy = {
+            "title": "Your whole server fleet at a glance",
+            "subtitle": "Live health, storage and alerts across all your servers",
+        }
+
+        def measured_height(text, width, pointsize, font):
+            return round(pointsize * 1.2 * (text.count("\n") + 1))
+
+        for kind, size, framed_size in (
+            ("iphone", (1320, 2868), (1500, 3100)),
+            ("ipad", (2064, 2752), (2300, 3000)),
+        ):
+            for template in ("title-top", "title-bottom"):
+                with self.subTest(kind=kind, template=template):
+                    layout = caption_layout(*size, template, copy, measure=measured_height)
+                    self.assertTrue(all("\n" in layer.text for layer in layout.layers))
+                    self.assertGreater(layout.layers[0].top, 0)
+                    self.assertLess(layout.layers[-1].top + layout.layers[-1].height, size[1])
+                    self.assertLess(layout.layers[0].top + layout.layers[0].height, layout.layers[1].top)
+                    with TemporaryDirectory() as tmp:
+                        with patch("asc_screens.image_size", return_value=framed_size), patch(
+                            "asc_screens.measure_caption", side_effect=measured_height
+                        ), patch("asc_screens.run") as run_mock:
+                            composite(kind, Path("source.png"), Path("frame.png"), Path(tmp), ["#000000"] * 3, template=template, copy=copy)
+                    command = run_mock.call_args.args[0]
+                    frame_command = command[command.index("frame.png"):]
+                    frame_top = int(frame_command[frame_command.index("-geometry") + 1].split("+")[-1])
+                    frame_height = int(frame_command[frame_command.index("-resize") + 1].rstrip("!").split("x")[1])
+                    self.assertGreater(frame_height, size[1] // 2)
+                    self.assertGreaterEqual(frame_top, layout.frame_top)
+                    self.assertLessEqual(frame_top + frame_height, layout.frame_bottom)
+                    if template == "title-top":
+                        self.assertLess(layout.layers[-1].top + layout.layers[-1].height, frame_top)
+                    else:
+                        self.assertLess(frame_top + frame_height, layout.layers[0].top)
+
+    def test_caption_layout_reserves_actual_height_beyond_explicit_wraps(self):
+        with patch("asc_screens.measure_caption", return_value=330) as measure:
+            layout = caption_layout(1320, 2868, "title-top", {"title": "Wide glyphs"})
+
+        measure.assert_called_once()
+        self.assertEqual(layout.layers[0].height, 330)
+        self.assertGreater(layout.frame_top, layout.layers[0].top + 330)
+
+    def test_caption_layout_rejects_text_that_leaves_no_frame_space(self):
+        with self.assertRaisesRegex(ValueError, "shorten the title or subtitle"):
+            caption_layout(1320, 2868, "title-top", {"title": "Huge copy"}, measure=lambda *args: 2800)
+
+    def test_process_kind_reports_caption_layout_failure(self):
+        args = Namespace(output_root="unused", frames_bin="frames", frame_color="Silver", validate=False)
+        with patch("asc_screens.frame_inputs", return_value=[(Path("source.png"), Path("frame.png"))]), patch(
+            "asc_screens.composite", side_effect=ValueError("shorten the title or subtitle")
+        ):
+            with self.assertRaisesRegex(SystemExit, "Cannot compose source.png: shorten the title or subtitle"):
+                process_kind(args, [], "iphone", ["#000000"] * 3)
+
+    def test_plain_and_empty_copy_preserve_frame_region_without_measurement(self):
+        with patch("asc_screens.measure_caption") as measure:
+            plain = caption_layout(1320, 2868, "plain", {"title": "Ignored"})
+            empty = caption_layout(2064, 2752, "title-bottom", {"title": "", "subtitle": ""})
+
+        measure.assert_not_called()
+        self.assertEqual((plain.layers, plain.frame_top, plain.frame_bottom), ((), 0, 2868))
+        self.assertEqual((empty.layers, empty.frame_top, empty.frame_bottom), ((), 0, 2752))
 
     def test_write_upload_manifest_groups_by_locale_and_family(self):
         with TemporaryDirectory() as tmp:

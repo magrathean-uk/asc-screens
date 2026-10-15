@@ -40,6 +40,8 @@ For a focused change, start with its test module:
 | Rendering, sizing, validation, manifests and previews | `python3 -m unittest test_asc_frame_maker -v` |
 | Guided input choices | `python3 -m unittest test_asc_gen_cli -v` |
 | Fingerprinting and upload command construction | `python3 -m unittest test_asc_screens_ci -v` |
+| Creative design, icon palettes, gradient finishes, device frames, media generation and validation | `python3 -m unittest test_asc_design test_asc_icon_palette test_asc_finish test_asc_device_frames test_asc_creative test_asc_asset_cli -v` |
+| Curated per-app campaigns and crop provenance | `python3 -m unittest test_asc_campaign -v` |
 
 Check parser entry points without rendering:
 
@@ -53,6 +55,16 @@ representative input and the prompts. Rendering changes need a real local run
 with ImageMagick and Apple Frames CLI, followed by inspection of images, captions,
 output counts and the contact sheet. Preview changes also need FFmpeg and playback
 of the result. Unit tests alone do not prove visual quality or App Store acceptance.
+
+For composed creatives, inspect wide and portrait exports with representative
+local app icons. The studio background should be a smooth full-canvas gradient
+using the icon's visible colours, quiet beside the copy and richer behind the
+product. It must not add panels, outlines, motifs, or accent rules. Check that
+`flat` is uniform and that changing an icon changes the gradient and its
+fingerprint. Use a local frame pack through `FRAMES_ASSETS` or a recipe path such
+as `"frame_assets": "$BOLYKI_DEV_LIBS/frames-apple401"`; environment variables
+and `~` expand before resolving the path. Confirm real device cutouts and
+outlines remain intact after rendering.
 
 For CI changes, use mocked commands to verify the handoff. A live run replaces
 remote screenshots and requires an intended target and explicit authorization.

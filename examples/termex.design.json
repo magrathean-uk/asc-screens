@@ -1,0 +1,11 @@
+{
+  "app_name": "Termex",
+  "title": "Move files.\nKeep working.",
+  "subtitle": "SFTP transfers, with your SSH sessions close.",
+  "detail": "SSH · SFTP · tmux",
+  "style": "dark",
+  "layout": "hero",
+  "media_kind": "image",
+  "finish": "studio",
+  "icon": "../../Termex/icons/Icon-iOS-Default-1024x1024@1x.png"
+}

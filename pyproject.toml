@@ -14,6 +14,7 @@ license = { text = "MIT" }
 asc-screens = "asc_screens:main"
 asc-gen = "asc_gen:main"
 asc-screens-ci = "asc_screens_ci:main"
+asc-screens-campaign = "asc_campaign:main"
 
 [tool.setuptools]
-py-modules = ["asc_screens", "asc_frame_maker", "asc_gen", "asc_screens_ci"]
+py-modules = ["asc_screens", "asc_frame_maker", "asc_gen", "asc_screens_ci", "asc_creative", "asc_design", "asc_campaign", "asc_device_frames", "asc_finish", "asc_icon_palette"]
