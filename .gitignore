@@ -20,3 +20,7 @@ asc_review.json
 asc_upload.json
 asc_creative_review.html
 asc_creative_review.json
+# --- secrets (clean-development) ---
+.env
+.env.*
+!.env.example
