@@ -8,6 +8,7 @@ permissions: {}
 
 jobs:
   check:
+    if: github.event.head_commit.message == 'Check automated build tag permissions'
     runs-on: ubuntu-latest
     permissions:
       contents: write

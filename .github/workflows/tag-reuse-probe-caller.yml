@@ -1,0 +1,13 @@
+name: Check reusable tag workflow caller
+
+on:
+  push:
+    branches: [codex/tag-permissions-check-20261108]
+
+permissions: {}
+
+jobs:
+  call:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/tag-reuse-probe-called.yml

@@ -1,0 +1,19 @@
+name: Check reusable tag workflow context
+
+on:
+  workflow_call:
+
+permissions: {}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check caller context
+        shell: bash
+        run: |
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REPOSITORY" = magrathean-uk/asc-screens
+          printf 'Reusable workflow received the caller event and repository.\n'
