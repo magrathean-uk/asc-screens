@@ -150,9 +150,23 @@ jobs:
 
 
           def reconcile(api, event, event_name, repo):
-              if event.get('repository', {}).get('full_name') != repo:
+              event_repo = event.get('repository')
+              # Scheduled events normally include repository metadata. If it is
+              # absent, verify it against the authenticated repository endpoint.
+              if event_name == 'schedule':
+                  if event_repo is None:
+                      event_repo = {}
+                  if not isinstance(event_repo, dict):
+                      raise ValueError('Invalid event repository metadata')
+                  if event_repo.get('full_name') and event_repo['full_name'] != repo:
+                      raise ValueError('Event repository does not match the runner repository')
+                  if event_repo.get('default_branch') and event_repo['default_branch'] != BRANCH:
+                      raise ValueError('Default branch changed; update the trigger and baseline')
+                  if not event_repo.get('full_name') or not event_repo.get('default_branch'):
+                      event_repo = api.request('GET', '')
+              if not isinstance(event_repo, dict) or event_repo.get('full_name') != repo:
                   raise ValueError('Event repository does not match the runner repository')
-              if event['repository'].get('default_branch') != BRANCH:
+              if event_repo.get('default_branch') != BRANCH:
                   raise ValueError('Default branch changed; update the trigger and baseline')
               if event_name == 'push':
                   if event.get('ref') != 'refs/heads/' + BRANCH:
@@ -169,39 +183,55 @@ jobs:
               head_sha = commit_sha(head['sha'])
               commits = new_commits(api, head_sha)
               planned = {}
+              seen = set()
+              collisions = set()
               for commit in commits:
                   sha = commit_sha(commit['sha'])
+                  if sha in seen:
+                      raise ValueError('Comparison returned duplicate commits')
+                  seen.add(sha)
                   # The UTC committer date makes the name stable on reruns,
                   # including reconciliation of commits pushed on earlier days.
                   name = tag_name(sha, commit['commit']['committer']['date'])
                   if name in planned and planned[name] != sha:
-                      raise ValueError(f'Short-SHA collision for {name}')
-                  planned[name] = sha
-              if len(planned) != len(commits):
-                  raise ValueError('Comparison returned duplicate commits')
+                      collisions.add(name)
+                  else:
+                      planned[name] = sha
               if not planned:
                   print('No commits after the installation baseline')
                   return
 
               tags = existing_tags(api)
-              # Check known conflicts before creating any new references.
-              for name, sha in planned.items():
-                  if name in tags and tags[name] != sha and resolve_tag(api, name) != sha:
-                      raise ValueError(f'Existing tag {name} points at a different commit')
+              failures = []
               created = present = 0
               for name, sha in planned.items():
-                  if name in tags:
-                      present += 1
+                  if name in collisions:
+                      failures.append((name, 'multiple commits share the same short SHA and date'))
                       continue
                   try:
-                      api.request('POST', '/git/refs', {'ref': 'refs/tags/' + name, 'sha': sha})
-                      created += 1
-                  except ApiError as exc:
-                      # Another concurrent reconciliation may have created it.
-                      if exc.status != 422 or resolve_tag(api, name) != sha:
-                          raise
-                      present += 1
-              print(f'Head {head_sha}: {created} tags created, {present} already present')
+                      if name in tags:
+                          if tags[name] != sha and resolve_tag(api, name) != sha:
+                              raise ValueError('existing tag points at a different commit')
+                          present += 1
+                          continue
+                      try:
+                          api.request('POST', '/git/refs', {'ref': 'refs/tags/' + name, 'sha': sha})
+                          created += 1
+                      except ApiError as exc:
+                          # Another concurrent reconciliation may have created it.
+                          if exc.status != 422:
+                              raise
+                          if resolve_tag(api, name) != sha:
+                              raise ValueError('concurrently created tag points at a different commit')
+                          present += 1
+                  except (ApiError, KeyError, OSError, TypeError, ValueError, RuntimeError) as exc:
+                      failures.append((name, str(exc)))
+              print(f'Head {head_sha}: {created} tags created, {present} already present, '
+                    f'{len(failures)} failed')
+              for name, reason in failures:
+                  print(f'{name}: {reason}', file=sys.stderr)
+              if failures:
+                  raise RuntimeError(f'{len(failures)} tag(s) could not be created or verified')
 
 
           def main():
