@@ -1,0 +1,15 @@
+name: Reconcile missed commit tags
+
+on:
+  # This separate workflow may be disabled after inactivity without disabling
+  # tagging for ordinary pushes. Scheduled catch-up remains best effort.
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions: {}
+
+jobs:
+  reconcile:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/tag-commits.yml

@@ -3,10 +3,8 @@ name: Tag default-branch commits
 on:
   push:
     branches: [main]
-  # Reconcile commits from skipped push workflows and GITHUB_TOKEN pushes.
-  schedule:
-    - cron: '17 */6 * * *'
   workflow_dispatch:
+  workflow_call:
 
 permissions: {}
 
@@ -24,6 +22,7 @@ jobs:
         run: |
           python3 - <<'PY'
           import datetime
+          import http.client
           import json
           import os
           import re
@@ -41,9 +40,10 @@ jobs:
 
 
           class ApiError(Exception):
-              def __init__(self, status, method, path):
+              def __init__(self, status, method, path, rate_limited=False):
                   super().__init__(f'{method} {path}: HTTP {status}')
                   self.status = status
+                  self.rate_limited = rate_limited
 
 
           class GitHub:
@@ -54,8 +54,11 @@ jobs:
                       raise ValueError('Missing GitHub token')
                   self.root = api_url.rstrip('/') + '/repos/' + repo
                   self.token = token
+                  self.rate_limited = False
 
               def request(self, method, path, body=None):
+                  if self.rate_limited:
+                      raise ApiError(429, method, path, rate_limited=True)
                   data = None if body is None else json.dumps(body).encode('utf-8')
                   req = urllib.request.Request(
                       self.root + path, data=data, method=method,
@@ -66,9 +69,25 @@ jobs:
                   )
                   try:
                       with urllib.request.urlopen(req, timeout=30) as response:
+                          headers = getattr(response, 'headers', {}) or {}
+                          headers = {key.lower(): value for key, value in headers.items()}
+                          if headers.get('x-ratelimit-remaining') == '0':
+                              self.rate_limited = True
                           return json.load(response)
                   except urllib.error.HTTPError as exc:
-                      raise ApiError(exc.code, method, path) from None
+                      headers = {key.lower(): value for key, value in (exc.headers or {}).items()}
+                      limited = exc.code == 429 or headers.get('x-ratelimit-remaining') == '0' or (
+                          exc.code == 403 and
+                          bool(headers.get('retry-after'))
+                      )
+                      if exc.code == 403 and not limited:
+                          try:
+                              message = json.loads(exc.read(65536)).get('message', '')
+                              limited = isinstance(message, str) and 'rate limit' in message.lower()
+                          except (AttributeError, OSError, TypeError, ValueError):
+                              pass
+                      self.rate_limited = limited
+                      raise ApiError(exc.code, method, path, rate_limited=limited) from None
                   except urllib.error.URLError:
                       raise RuntimeError(f'{method} {path}: network request failed') from None
 
@@ -81,6 +100,8 @@ jobs:
 
           def tag_name(sha, date):
               sha = commit_sha(sha)
+              if not isinstance(date, str):
+                  raise ValueError('Committer date is missing or invalid')
               instant = datetime.datetime.fromisoformat(date.replace('Z', '+00:00'))
               if instant.tzinfo is None or instant.utcoffset() is None:
                   raise ValueError('Commit date has no timezone')
@@ -185,6 +206,8 @@ jobs:
               planned = {}
               seen = set()
               collisions = set()
+              invalid_date_prefixes = set()
+              failures = []
               for commit in commits:
                   sha = commit_sha(commit['sha'])
                   if sha in seen:
@@ -192,19 +215,30 @@ jobs:
                   seen.add(sha)
                   # The UTC committer date makes the name stable on reruns,
                   # including reconciliation of commits pushed on earlier days.
-                  name = tag_name(sha, commit['commit']['committer']['date'])
+                  try:
+                      name = tag_name(sha, commit['commit']['committer']['date'])
+                  except (KeyError, TypeError, ValueError) as exc:
+                      failures.append((sha, f'invalid or missing committer date: {exc}'))
+                      invalid_date_prefixes.add(sha[:12])
+                      continue
                   if name in planned and planned[name] != sha:
                       collisions.add(name)
                   else:
                       planned[name] = sha
-              if not planned:
+              if not planned and not failures:
                   print('No commits after the installation baseline')
                   return
 
-              tags = existing_tags(api)
-              failures = []
+              tags = existing_tags(api) if planned else {}
+              rate_limited = getattr(api, 'rate_limited', False)
               created = present = 0
               for name, sha in planned.items():
+                  if rate_limited:
+                      failures.append((name, 'not processed due to confirmed API rate limit'))
+                      continue
+                  if sha[:12] in invalid_date_prefixes:
+                      failures.append((name, 'same short SHA as a commit with an invalid date'))
+                      continue
                   if name in collisions:
                       failures.append((name, 'multiple commits share the same short SHA and date'))
                       continue
@@ -213,25 +247,29 @@ jobs:
                           if tags[name] != sha and resolve_tag(api, name) != sha:
                               raise ValueError('existing tag points at a different commit')
                           present += 1
-                          continue
-                      try:
-                          api.request('POST', '/git/refs', {'ref': 'refs/tags/' + name, 'sha': sha})
-                          created += 1
-                      except ApiError as exc:
-                          # Another concurrent reconciliation may have created it.
-                          if exc.status != 422:
-                              raise
-                          if resolve_tag(api, name) != sha:
-                              raise ValueError('concurrently created tag points at a different commit')
-                          present += 1
-                  except (ApiError, KeyError, OSError, TypeError, ValueError, RuntimeError) as exc:
-                      failures.append((name, str(exc)))
+                      else:
+                          try:
+                              api.request('POST', '/git/refs', {'ref': 'refs/tags/' + name, 'sha': sha})
+                              created += 1
+                          except ApiError as exc:
+                              # Another concurrent reconciliation may have created it.
+                              if exc.status != 422:
+                                  raise
+                              if resolve_tag(api, name) != sha:
+                                  raise ValueError('concurrently created tag points at a different commit')
+                              present += 1
+                  except (ApiError, http.client.HTTPException, KeyError, OSError, TypeError, ValueError, RuntimeError) as exc:
+                      reason = 'HTTP transport error' if isinstance(exc, http.client.HTTPException) else str(exc)
+                      failures.append((name, reason))
+                      if isinstance(exc, ApiError) and exc.rate_limited:
+                          rate_limited = True
+                  rate_limited = rate_limited or getattr(api, 'rate_limited', False)
               print(f'Head {head_sha}: {created} tags created, {present} already present, '
                     f'{len(failures)} failed')
               for name, reason in failures:
                   print(f'{name}: {reason}', file=sys.stderr)
               if failures:
-                  raise RuntimeError(f'{len(failures)} tag(s) could not be created or verified')
+                  raise RuntimeError(f'{len(failures)} commit/tag item(s) could not be processed')
 
 
           def main():
@@ -245,6 +283,9 @@ jobs:
           if __name__ == '__main__':
               try:
                   main()
+              except http.client.HTTPException:
+                  print('Tag reconciliation failed: HTTP transport error', file=sys.stderr)
+                  sys.exit(1)
               except (ApiError, KeyError, OSError, TypeError, ValueError, RuntimeError) as exc:
                   print(f'Tag reconciliation failed: {exc}', file=sys.stderr)
                   sys.exit(1)
