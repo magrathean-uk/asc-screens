@@ -1,0 +1,30 @@
+name: Check tagging historical commits
+
+on:
+  push:
+    branches: [codex/tag-permissions-check-20261108]
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Tag two existing default-branch commits
+        shell: bash
+        run: |
+          set +e
+          gh api --silent --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref=refs/tags/build-20261023-0659250068a4 \
+            -f sha=0659250068a4c8f0e4833b532f8c09ccfae78e0d
+          older=$?
+          gh api --silent --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref=refs/tags/build-20261023-9f9b7ba03bc3 \
+            -f sha=9f9b7ba03bc398163b7a3555f63fb3aae4dbbc1a
+          head=$?
+          printf 'Historical commit status: %s; default-branch head status: %s\n' "$older" "$head"
+          test "$older" -eq 0 && test "$head" -eq 0
