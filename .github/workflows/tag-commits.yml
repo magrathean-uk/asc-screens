@@ -1,0 +1,221 @@
+name: Tag default-branch commits
+
+on:
+  push:
+    branches: [main]
+  # Reconcile commits from skipped push workflows and GITHUB_TOKEN pushes.
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Reconcile commit tags
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import re
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          # The default-branch head before this workflow was introduced. Keeping
+          # it fixed bounds reconciliation to commits introduced after the pilot.
+          BASELINE = '9f9b7ba03bc398163b7a3555f63fb3aae4dbbc1a'
+          BRANCH = 'main'
+          SHA = re.compile(r'^[0-9a-f]{40}$')
+          PAGE_SIZE = 100
+
+
+          class ApiError(Exception):
+              def __init__(self, status, method, path):
+                  super().__init__(f'{method} {path}: HTTP {status}')
+                  self.status = status
+
+
+          class GitHub:
+              def __init__(self, api_url, repo, token):
+                  if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo):
+                      raise ValueError('Invalid repository name')
+                  if not token:
+                      raise ValueError('Missing GitHub token')
+                  self.root = api_url.rstrip('/') + '/repos/' + repo
+                  self.token = token
+
+              def request(self, method, path, body=None):
+                  data = None if body is None else json.dumps(body).encode('utf-8')
+                  req = urllib.request.Request(
+                      self.root + path, data=data, method=method,
+                      headers={'Accept': 'application/vnd.github+json',
+                               'Authorization': 'Bearer ' + self.token,
+                               'X-GitHub-Api-Version': '2022-11-28',
+                               'Content-Type': 'application/json'},
+                  )
+                  try:
+                      with urllib.request.urlopen(req, timeout=30) as response:
+                          return json.load(response)
+                  except urllib.error.HTTPError as exc:
+                      raise ApiError(exc.code, method, path) from None
+                  except urllib.error.URLError:
+                      raise RuntimeError(f'{method} {path}: network request failed') from None
+
+
+          def commit_sha(value):
+              if not isinstance(value, str) or not SHA.fullmatch(value):
+                  raise ValueError('Expected a full lowercase commit SHA')
+              return value
+
+
+          def tag_name(sha, date):
+              sha = commit_sha(sha)
+              instant = datetime.datetime.fromisoformat(date.replace('Z', '+00:00'))
+              if instant.tzinfo is None or instant.utcoffset() is None:
+                  raise ValueError('Commit date has no timezone')
+              day = instant.astimezone(datetime.timezone.utc).strftime('%Y%m%d')
+              return f'build-{day}-{sha[:12]}'
+
+
+          def new_commits(api, head):
+              commits = []
+              expected = None
+              page = 1
+              while True:
+                  comparison = api.request(
+                      'GET', f'/compare/{BASELINE}...{head}?per_page={PAGE_SIZE}&page={page}'
+                  )
+                  if comparison['status'] not in ('ahead', 'identical'):
+                      raise ValueError('Default branch no longer descends from the baseline')
+                  count = comparison['ahead_by']
+                  if not isinstance(count, int) or count < 0 or (expected is not None and count != expected):
+                      raise ValueError('Inconsistent comparison response')
+                  expected = count
+                  batch = comparison['commits']
+                  if not isinstance(batch, list):
+                      raise ValueError('Invalid comparison page')
+                  commits.extend(batch)
+                  if len(commits) >= expected:
+                      break
+                  if not batch:
+                      raise ValueError('Comparison ended before all commits were returned')
+                  page += 1
+              if len(commits) != expected:
+                  raise ValueError('Comparison returned an unexpected commit count')
+              return commits
+
+
+          def existing_tags(api):
+              tags = {}
+              page = 1
+              while True:
+                  batch = api.request('GET', f'/tags?per_page={PAGE_SIZE}&page={page}')
+                  if not isinstance(batch, list):
+                      raise ValueError('Invalid tags page')
+                  for tag in batch:
+                      name = tag['name']
+                      if name.startswith('build-'):
+                          sha = commit_sha(tag['commit']['sha'])
+                          if name in tags and tags[name] != sha:
+                              raise ValueError('Tag listing contains conflicting names')
+                          tags[name] = sha
+                  if len(batch) < PAGE_SIZE:
+                      return tags
+                  page += 1
+
+
+          def resolve_tag(api, tag):
+              obj = api.request('GET', '/git/ref/tags/' + urllib.parse.quote(tag, safe=''))['object']
+              # Accept a pre-existing annotated tag only if it resolves to the
+              # same commit; never move or replace a conflicting tag.
+              for _ in range(16):
+                  kind, sha = obj['type'], commit_sha(obj['sha'])
+                  if kind == 'commit':
+                      return sha
+                  if kind != 'tag':
+                      raise ValueError(f'{tag} does not resolve to a commit')
+                  obj = api.request('GET', '/git/tags/' + sha)['object']
+              raise ValueError(f'{tag} has too many nested annotated tags')
+
+
+          def reconcile(api, event, event_name, repo):
+              if event.get('repository', {}).get('full_name') != repo:
+                  raise ValueError('Event repository does not match the runner repository')
+              if event['repository'].get('default_branch') != BRANCH:
+                  raise ValueError('Default branch changed; update the trigger and baseline')
+              if event_name == 'push':
+                  if event.get('ref') != 'refs/heads/' + BRANCH:
+                      raise ValueError('Not a default-branch push')
+                  if event.get('deleted'):
+                      print('Default branch was deleted; nothing to tag')
+                      return
+              elif event_name not in ('schedule', 'workflow_dispatch'):
+                  raise ValueError('Unsupported event')
+
+              head = api.request('GET', '/git/ref/heads/' + BRANCH)['object']
+              if head['type'] != 'commit':
+                  raise ValueError('Default-branch head is not a commit')
+              head_sha = commit_sha(head['sha'])
+              commits = new_commits(api, head_sha)
+              planned = {}
+              for commit in commits:
+                  sha = commit_sha(commit['sha'])
+                  # The UTC committer date makes the name stable on reruns,
+                  # including reconciliation of commits pushed on earlier days.
+                  name = tag_name(sha, commit['commit']['committer']['date'])
+                  if name in planned and planned[name] != sha:
+                      raise ValueError(f'Short-SHA collision for {name}')
+                  planned[name] = sha
+              if len(planned) != len(commits):
+                  raise ValueError('Comparison returned duplicate commits')
+              if not planned:
+                  print('No commits after the installation baseline')
+                  return
+
+              tags = existing_tags(api)
+              # Check known conflicts before creating any new references.
+              for name, sha in planned.items():
+                  if name in tags and tags[name] != sha and resolve_tag(api, name) != sha:
+                      raise ValueError(f'Existing tag {name} points at a different commit')
+              created = present = 0
+              for name, sha in planned.items():
+                  if name in tags:
+                      present += 1
+                      continue
+                  try:
+                      api.request('POST', '/git/refs', {'ref': 'refs/tags/' + name, 'sha': sha})
+                      created += 1
+                  except ApiError as exc:
+                      # Another concurrent reconciliation may have created it.
+                      if exc.status != 422 or resolve_tag(api, name) != sha:
+                          raise
+                      present += 1
+              print(f'Head {head_sha}: {created} tags created, {present} already present')
+
+
+          def main():
+              repo = os.environ['GITHUB_REPOSITORY']
+              with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as event_file:
+                  event = json.load(event_file)
+              api = GitHub(os.environ['GITHUB_API_URL'], repo, os.environ['GH_TOKEN'])
+              reconcile(api, event, os.environ['GITHUB_EVENT_NAME'], repo)
+
+
+          if __name__ == '__main__':
+              try:
+                  main()
+              except (ApiError, KeyError, OSError, TypeError, ValueError, RuntimeError) as exc:
+                  print(f'Tag reconciliation failed: {exc}', file=sys.stderr)
+                  sys.exit(1)
+          PY
