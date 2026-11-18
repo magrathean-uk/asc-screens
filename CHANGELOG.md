@@ -15,8 +15,9 @@ records behavior present in the checkout; it does not identify a published relea
 - An explicit `--background` no longer triggers the background prompt.
 - Inputs that would write the same output file stop the run instead of
   silently overwriting each other.
-- `asc-screens-ci` maps Mac screenshots to `DESKTOP` by default and fingerprints
-  the Mac wallpaper and icon.
+- `asc-screens-ci` maps Mac screenshots to `DESKTOP` by default, refuses to mix
+  Mac and iPhone/iPad sets with the wrong platform before uploading, and
+  fingerprints the Mac wallpaper, app icon and Dock icons.
 
 - Added a studio finish with smooth full-canvas gradients derived automatically
   from local app icon colours, rounded icons, and device silhouette shadows.

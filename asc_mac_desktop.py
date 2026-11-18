@@ -58,8 +58,8 @@ class MacDesktopOptions:
 
 
 def split_list(value):
-    if value is None:
-        return None
+    if not value:
+        return [] if value is not None else None
     if isinstance(value, str):
         return [part.strip() for part in value.split(",") if part.strip()]
     return [str(part).strip() for part in value if str(part).strip()]
@@ -103,6 +103,9 @@ def resolve_options(args):
         raise ValueError(f"Mac wallpaper not found: {wallpaper}")
     menus = split_list(getattr(args, "mac_menus", None))
     dock = split_list(getattr(args, "mac_dock", None))
+    missing = [entry for entry in dock or () if not Path(entry).expanduser().exists()]
+    if missing:
+        raise ValueError(f"Mac Dock entries not found: {', '.join(missing)}")
     return MacDesktopOptions(
         app_name=name,
         app_icon=app_icon,
@@ -169,6 +172,8 @@ def desktop_layout(target_size, entries):
     dock_w = (2 * DOCK_SIDE_PAD_PT * s + len(entries) * tile + max(0, len(entries) - 1) * gap
               + separator_count * DOCK_SEPARATOR_SLOT_PT * s)
     dock_h = (DOCK_TOP_PAD_PT + DOCK_BOTTOM_PAD_PT) * s + tile
+    if dock_w > width:
+        raise ValueError(f"The Dock has too many apps ({len(entries)}) for a {width}-pixel screenshot; shorten --mac-dock.")
     dock_x = (width - dock_w) / 2
     dock_y = height - DOCK_BOTTOM_GAP_PT * s - dock_h
     tiles = []

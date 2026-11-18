@@ -137,8 +137,8 @@ asc-screens ./source --kind mac --mac-app /Applications/Tescam.app --mac-wallpap
 - `--mac-wallpaper`: a wallpaper image, cropped to fill. Default: a gradient from the
   screenshot background colours.
 - `--mac-clock`: the clock text. Default: today's date at 9:41.
-- `--mac-dock`: the `.app` bundles or icon images kept in the Dock, comma separated.
-  Apps missing on this Mac are left out.
+- `--mac-dock`: the `.app` bundles or icon images kept in the Dock, comma separated;
+  each must exist. Default apps missing on this Mac are left out.
 - `--mac-style fill`: the previous behaviour, which scales the capture to the whole
   screenshot without a desktop.
 

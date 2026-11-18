@@ -614,7 +614,10 @@ def process_mac_desktop(args, jobs, target_size=None, background_colors=None):
     wallpaper = work_dir / f"wallpaper-{target_w}x{target_h}.png"
     run(mac_wallpaper_command(options, target_w, target_h, background_colors, wallpaper))
     entries = mac_desktop.dock_entries(options, opaque_corner=lambda path: corner_alpha(path) >= 0.5)
-    layout = mac_desktop.desktop_layout((target_w, target_h), entries)
+    try:
+        layout = mac_desktop.desktop_layout((target_w, target_h), entries)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     dock_x, dock_y, dock_w, dock_h = (round(value) for value in layout.dock_rect)
     menubar_dark = region_brightness(wallpaper, f"{target_w}x{layout.menubar_height}+0+0") < mac_desktop.BRIGHT_BACKGROUND
     dock_dark = region_brightness(wallpaper, f"{dock_w}x{dock_h}+{dock_x}+{dock_y}") < mac_desktop.BRIGHT_BACKGROUND
@@ -752,6 +755,10 @@ def resolve_config_paths(args, config_path):
         if not path.is_absolute():
             path = config_dir / path
         setattr(resolved, key, path)
+    dock = mac_desktop.split_list(getattr(resolved, "mac_dock", None))
+    if dock is not None:
+        resolved.mac_dock = [str(path if (path := Path(entry).expanduser()).is_absolute() else config_dir / path)
+                             for entry in dock]
     return resolved
 
 
@@ -1067,8 +1074,8 @@ def main():
     if not jobs:
         print("No screenshots found. Use PNG, JPG, JPEG, HEIC, HEIF, TIF, or TIFF.")
         return
-    require_unique_output_names(jobs)
     kinds = [kind for kind, _size in expand_export_targets(args.kind)]
+    require_unique_output_names([job for job in jobs if job.device in kinds])
     if needs_frames(jobs, kinds):
         args.frames_bin = str(require_frames_bin(args.frames_bin))
     preflight_mac_desktop(args, jobs, kinds)

@@ -39,10 +39,10 @@ class MacOptionsTests(unittest.TestCase):
 
     def test_explicit_name_and_lists_override_defaults(self):
         resolved = mac.resolve_options(Namespace(mac_app_name="WGEX", mac_menus="File, Tunnel ,Help",
-                                                 mac_dock=["/A.app"], mac_clock="Mon 9:41"))
+                                                 mac_dock=["/System/Library/CoreServices/Finder.app"], mac_clock="Mon 9:41"))
         self.assertEqual(resolved.app_name, "WGEX")
         self.assertEqual(resolved.menus, ("File", "Tunnel", "Help"))
-        self.assertEqual(resolved.dock_apps, ("/A.app",))
+        self.assertEqual(resolved.dock_apps, ("/System/Library/CoreServices/Finder.app",))
         self.assertEqual(resolved.clock, "Mon 9:41")
 
     def test_name_is_required_without_a_bundle(self):
@@ -53,6 +53,18 @@ class MacOptionsTests(unittest.TestCase):
                 mac.resolve_options(Namespace(mac_app=str(icon)))
         with self.assertRaisesRegex(ValueError, "not found"):
             mac.resolve_options(Namespace(mac_app="/missing/Nothing.app"))
+
+    def test_explicit_dock_entries_must_exist(self):
+        with self.assertRaisesRegex(ValueError, "Dock entries not found: /missing/B.app"):
+            mac.resolve_options(Namespace(mac_app_name="Tescam", mac_dock="/missing/B.app"))
+
+    def test_config_dock_paths_resolve_beside_the_config(self):
+        from asc_screens import resolve_config_paths
+
+        with TemporaryDirectory() as tmp:
+            config = Path(tmp) / "asc-screens.json"
+            resolved = resolve_config_paths(Namespace(mac_dock=["icons/a.png", "/Applications/B.app"]), config)
+        self.assertEqual(resolved.mac_dock, [str(Path(tmp).resolve() / "icons/a.png"), "/Applications/B.app"])
 
     def test_default_clock_uses_the_date_at_941(self):
         self.assertEqual(mac.default_clock(datetime.date(2026, 11, 18)), "Wed 18 Nov 9:41")
@@ -97,6 +109,10 @@ class LayoutTests(unittest.TestCase):
         self.assertEqual(len(layout.separators), 1)
         self.assertLess(layout.separators[0][0], layout.tiles[-1][0])
         self.assertGreater(layout.separators[0][0], layout.tiles[-2][0] + layout.tiles[-2][2])
+
+    def test_dock_wider_than_the_screen_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "too many apps"):
+            mac.desktop_layout((1280, 800), self.entries(30))
 
     def test_window_keeps_natural_size_when_it_fits(self):
         layout = mac.desktop_layout((2880, 1800), self.entries())

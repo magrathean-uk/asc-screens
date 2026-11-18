@@ -12,6 +12,7 @@ from pathlib import Path
 
 from asc_screens import load_config
 
+from asc_mac_desktop import split_list
 
 DEFAULT_DEVICE_TYPE_MAP = {
     "iphone": "IPHONE_69",
@@ -68,10 +69,19 @@ def resolve_root_path(root, value):
 
 def default_design_inputs(asc_screens_config, asc_config):
     inputs = [asc_screens_config]
-    for key in ("source", "copy_file", "design_file", "mac_wallpaper", "mac_app"):
+    for key in ("source", "copy_file", "design_file", "mac_wallpaper"):
         value = asc_config.get(key)
-        # A .app bundle is identified by its name; hashing a whole bundle is needless work.
-        if value and not (key == "mac_app" and str(value).lower().endswith(".app")):
+        if value:
+            inputs.append(value)
+    mac_icons = [asc_config.get("mac_app"), *(split_list(asc_config.get("mac_dock")) or [])]
+    for value in mac_icons:
+        if not value:
+            continue
+        value = str(value).rstrip("/")
+        if value.lower().endswith(".app"):
+            # Hash what the Dock shows (name and icon), not the whole bundle.
+            inputs.extend(f"{value}/Contents/{part}" for part in ("Info.plist", "Resources/*.icns", "Resources/Assets.car"))
+        else:
             inputs.append(value)
     return tuple(inputs)
 
@@ -271,6 +281,11 @@ def preflight_upload_manifest(config):
             device_type = config.device_type_map.get(family)
             if not isinstance(device_type, str) or not device_type.strip():
                 raise SystemExit(f"No supported device_type_map configured for {family}")
+            # Mac screenshots belong to the macOS version, iPhone/iPad ones to the iOS
+            # version; stop before any set is replaced rather than halfway through.
+            if (family == "mac") != (config.platform == "MAC_OS"):
+                raise SystemExit(f"{family} screenshots cannot upload to a {config.platform} version; "
+                                 "build and upload Mac screenshots in a separate run with platform MAC_OS")
             if not isinstance(entries, list) or not 1 <= len(entries) <= 10:
                 raise SystemExit(f"Screenshot set {locale}/{family} must contain 1 to 10 files")
             directory = (config.output_root / locale / family if locale != "default" else config.output_root / family).resolve()

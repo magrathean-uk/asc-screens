@@ -70,7 +70,26 @@ class AscScreensCiTests(unittest.TestCase):
             with_bundle = load_ci_config(ci_config).design_inputs
 
         self.assertEqual([Path(value).name for value in with_icon[1:]], ["shots", "wall.png", "icon.png"])
-        self.assertEqual([Path(value).name for value in with_bundle[1:]], ["shots"])
+        self.assertEqual([value.split("Tescam.app/")[-1] for value in with_bundle[1:]],
+                         [str(Path(tmp).resolve() / "shots"), "Contents/Info.plist", "Contents/Resources/*.icns",
+                          "Contents/Resources/Assets.car"])
+
+    def test_mac_screenshots_need_a_mac_os_version_before_anything_uploads(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config, manifest = self.creative_fixture(root)
+            sets = {}
+            for family in ("iphone", "mac"):
+                path = config.output_root / family
+                path.mkdir()
+                (path / "01.png").touch()
+                sets[family] = [{"filename": "01.png", "path": str(path / "01.png")}]
+            manifest["locales"] = {"default": sets}
+            (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            calls = []
+            with self.assertRaisesRegex(SystemExit, "mac screenshots cannot upload to a IOS version"):
+                upload_screenshots(config, runner=self.fake_asc_runner(calls))
+            self.assertEqual(calls, [])
 
     def test_upload_screenshots_runs_asc_commands_from_manifest(self):
         with TemporaryDirectory() as tmp:

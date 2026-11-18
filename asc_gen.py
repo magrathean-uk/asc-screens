@@ -224,9 +224,9 @@ def main():
     if mode == "check":
         raise SystemExit(validate_existing_images(source))
 
-    require_unique_output_names(jobs)
     kinds = prompt_kinds(jobs)
     resolved_kinds = [resolved for kind in kinds for resolved, _size in expand_export_targets(kind)]
+    require_unique_output_names([job for job in jobs if job.device in resolved_kinds])
     mac_app, mac_app_name = (prompt_mac_app() if "mac" in resolved_kinds and counts["mac"] else (None, None))
     background_colors = prompt_background()
     copy_file = prompt_copy_file()

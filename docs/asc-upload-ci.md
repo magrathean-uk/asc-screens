@@ -65,8 +65,9 @@ If `design_inputs` is absent or empty, the wrapper uses the renderer configurati
 plus its `source` and `copy_file` values when present. Those default input paths
 resolve relative to the renderer configuration, including when it is nested.
 The `design_file` and its referenced `icon` also contribute when present; icon
-paths resolve beside the design JSON. A Mac `mac_wallpaper` and a `mac_app` icon
-image contribute too; a `mac_app` `.app` bundle does not.
+paths resolve beside the design JSON. A Mac `mac_wallpaper`, `mac_app` and `mac_dock`
+icon images contribute too; for a `.app` bundle its `Info.plist` and icon
+resources contribute, not the whole bundle.
 Explicit `design_inputs` resolve relative to the CI configuration. Shared
 renderer code (`asc_screens.py`, `asc_mac_desktop.py`, `asc_creative.py`,
 `asc_design.py`, `asc_device_frames.py`, `asc_finish.py` and
@@ -83,7 +84,8 @@ The default locale is `en-US`; it applies to non-localized output recorded as
 mappings shown above are the defaults in this checkout; `DESKTOP` is the Mac
 App Store slot (`APP_DESKTOP`) in `asc` 5.14.3. Mac screenshots belong to the
 app's macOS version, so set `"platform": "MAC_OS"` in the CI configuration for a
-Mac upload. Legacy `--preview` videos are not
+Mac upload. The upload stops before replacing anything if Mac screenshots meet a
+non-macOS version or iPhone/iPad screenshots meet a macOS version. Legacy `--preview` videos are not
 uploaded by this wrapper. Creative videos from `--asset` are uploaded to the
 Asset Library.
 
