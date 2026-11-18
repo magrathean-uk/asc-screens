@@ -37,6 +37,8 @@ from asc_screens import (
     process_app_preview,
     process_kind,
     process_mac,
+    duplicate_output_names,
+    needs_frames,
     require_frames_bin,
     target_for_kind,
     validate_output_dir,
@@ -528,13 +530,47 @@ class AscFrameMakerTests(unittest.TestCase):
 
             self.assertEqual(outputs, [output])
 
+    def test_frames_are_needed_only_for_iphone_or_ipad_jobs(self):
+        mac_only = [ImageJob(Path("a.png"), "mac")]
+        mixed = [*mac_only, ImageJob(Path("b.png"), "iphone")]
+        self.assertFalse(needs_frames(mac_only, ["iphone", "ipad", "mac"]))
+        self.assertFalse(needs_frames(mixed, ["mac"]))
+        self.assertTrue(needs_frames(mixed, ["iphone", "mac"]))
+
+    def test_duplicate_output_names_are_reported_per_device(self):
+        jobs = [
+            ImageJob(Path("set-a/iphone/01.png"), "iphone"),
+            ImageJob(Path("set-b/iphone/01.jpg"), "iphone"),
+            ImageJob(Path("set-a/ipad/01.png"), "ipad"),
+        ]
+        self.assertEqual(duplicate_output_names(jobs), [(Path("set-a/iphone/01.png"), Path("set-b/iphone/01.jpg"))])
+
+    def test_mac_only_build_with_background_needs_no_frames_or_prompt(self):
+        import asc_screens
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "mac").mkdir()
+            (root / "mac" / "01.png").touch()
+            argv = ["asc-screens", str(root), "--kind", "mac", "--background", "#101010,#202020,#303030", "--mac-style", "fill",
+                    "--output-root", str(root / "out")]
+            with patch("sys.argv", argv), \
+                    patch("asc_screens.shutil.which", return_value="/usr/bin/magick"), \
+                    patch("asc_screens.require_frames_bin", side_effect=AssertionError("frames checked")), \
+                    patch("asc_screens.prompt_for_background", side_effect=AssertionError("prompted")), \
+                    patch("asc_screens.process_kind", return_value=[]) as process_kind_mock:
+                asc_screens.main()
+
+        self.assertEqual(process_kind_mock.call_args.args[2], "mac")
+        self.assertEqual(process_kind_mock.call_args.args[3][0], "#101010")
+
     @patch("asc_screens.run")
     def test_process_mac_scales_exact_without_framing_or_text(self, run_mock):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "desktop.png"
             source.touch()
-            args = Namespace(output_root=root / "out", validate=False)
+            args = Namespace(output_root=root / "out", validate=False, mac_style="fill")
 
             outputs = process_mac(args, [ImageJob(source, "mac")], target_size=(2880, 1800))
 

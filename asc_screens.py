@@ -11,6 +11,7 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
+import asc_mac_desktop as mac_desktop
 from asc_creative import CREATIVE_PROFILES, check_creative_assets, load_creative_design, process_creative_assets
 
 
@@ -375,6 +376,32 @@ def collect_jobs(input_root):
     return mixed
 
 
+def duplicate_output_names(jobs):
+    """Sources that would write the same output file (same device and filename stem)."""
+    seen = {}
+    clashes = []
+    for job in jobs:
+        key = (job.device, job.source.stem.lower())
+        if key in seen:
+            clashes.append((seen[key], job.source))
+        else:
+            seen[key] = job.source
+    return clashes
+
+
+def require_unique_output_names(jobs):
+    clashes = duplicate_output_names(jobs)
+    if clashes:
+        detail = "; ".join(f"{first} and {second}" for first, second in clashes)
+        raise SystemExit(f"These screenshots would overwrite each other's output; rename one of each pair: {detail}")
+
+
+def needs_frames(jobs, kinds):
+    """Apple Frames is only needed when iPhone or iPad screenshots will be framed."""
+    framed = {"iphone", "ipad"} & set(kinds)
+    return any(job.device in framed for job in jobs)
+
+
 def frame_inputs(device, jobs, framed_dir, frames_bin, frame_color):
     files = [job.source for job in jobs if job.device == device]
     if not files:
@@ -459,7 +486,7 @@ def validate(output_dir, kind):
 
 def process_kind(args, jobs, kind, background_colors, target_size=None, template="plain", copy=None):
     if kind == "mac":
-        return process_mac(args, jobs, target_size=target_size)
+        return process_mac(args, jobs, target_size=target_size, background_colors=background_colors)
 
     output_dir = Path(args.output_root) / kind
     framed_dir = Path(args.output_root) / "_framed" / kind
@@ -485,7 +512,9 @@ def process_kind(args, jobs, kind, background_colors, target_size=None, template
     return outputs
 
 
-def process_mac(args, jobs, target_size=None):
+def process_mac(args, jobs, target_size=None, background_colors=None):
+    if (getattr(args, "mac_style", None) or "desktop") == "desktop":
+        return process_mac_desktop(args, jobs, target_size=target_size, background_colors=background_colors)
     target_w, target_h = target_size or target_for_kind("mac")
     output_dir = Path(args.output_root) / "mac"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -519,6 +548,95 @@ def process_mac(args, jobs, target_size=None):
             detail = exc.stderr.strip() if getattr(exc, "stderr", None) else "scale command failed"
             print(f"Skip {job.source}: {detail}", file=sys.stderr)
             continue
+        outputs.append(output)
+    if args.validate and outputs:
+        validate(output_dir, "mac")
+    return outputs
+
+
+def corner_alpha(path):
+    """Alpha of the top-left pixel: 0 for a window capture with its own shadow, 1 for an opaque capture."""
+    result = subprocess.run(
+        ["magick", f"{path}[0]", "-alpha", "set", "-format", "%[fx:p{0,0}.a]", "info:"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return float(result.stdout.strip() or 1)
+
+
+def region_brightness(path, geometry):
+    result = subprocess.run(
+        ["magick", str(path), "-crop", geometry, "+repage", "-colorspace", "Gray", "-format", "%[fx:mean]", "info:"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+    return float(result.stdout.strip())
+
+
+def mac_wallpaper_command(options, width, height, background_colors, output):
+    if options.wallpaper is not None:
+        source = ["magick", f"{options.wallpaper}[0]", "-auto-orient", "-resize", f"{width}x{height}^",
+                  "-gravity", "center", "-extent", f"{width}x{height}"]
+    else:
+        source = ["magick", *background_command(width, height, background_colors or DEFAULT_BACKGROUND)]
+    return [*source, "-alpha", "off", "-colorspace", "sRGB", "-depth", "8", "-strip", f"PNG24:{output}"]
+
+
+def preflight_mac_desktop(args, jobs=None, kinds=("mac",)):
+    """Check Swift and the Mac desktop settings before any rendering starts."""
+    if (getattr(args, "mac_style", None) or "desktop") != "desktop" or "mac" not in kinds:
+        return None
+    if jobs is not None and not any(job.device == "mac" for job in jobs):
+        return None
+    swift = shutil.which("swift")
+    if not swift:
+        raise SystemExit("Mac desktop screenshots need Swift: xcode-select --install (or use --mac-style fill).")
+    try:
+        return swift, mac_desktop.resolve_options(args)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
+def process_mac_desktop(args, jobs, target_size=None, background_colors=None):
+    """Place each Mac window capture on a desktop with the menu bar and the Dock."""
+    mac_jobs = [job for job in jobs if job.device == "mac"]
+    if not mac_jobs:
+        return []
+    swift, options = preflight_mac_desktop(args)
+    target_w, target_h = target_size or target_for_kind("mac")
+    output_dir = Path(args.output_root) / "mac"
+    work_dir = Path(args.output_root) / "_framed" / "mac"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    work_dir.mkdir(parents=True, exist_ok=True)
+
+    wallpaper = work_dir / f"wallpaper-{target_w}x{target_h}.png"
+    run(mac_wallpaper_command(options, target_w, target_h, background_colors, wallpaper))
+    entries = mac_desktop.dock_entries(options, opaque_corner=lambda path: corner_alpha(path) >= 0.5)
+    layout = mac_desktop.desktop_layout((target_w, target_h), entries)
+    dock_x, dock_y, dock_w, dock_h = (round(value) for value in layout.dock_rect)
+    menubar_dark = region_brightness(wallpaper, f"{target_w}x{layout.menubar_height}+0+0") < mac_desktop.BRIGHT_BACKGROUND
+    dock_dark = region_brightness(wallpaper, f"{dock_w}x{dock_h}+{dock_x}+{dock_y}") < mac_desktop.BRIGHT_BACKGROUND
+
+    scenes = []
+    for job in mac_jobs:
+        raw = work_dir / f"{job.source.stem}_desktop.png"
+        rect = mac_desktop.window_rect(layout, image_size(job.source))
+        # Opaque captures get rounded corners and a window shadow; captures that
+        # already carry the macOS shadow (transparent surround) are placed as they are.
+        scenes.append((job.source, rect, corner_alpha(job.source) >= 0.5, raw))
+    spec = mac_desktop.build_spec((target_w, target_h), layout, entries, options, wallpaper, menubar_dark, dock_dark, scenes)
+    try:
+        mac_desktop.render(spec, work_dir, swift_bin=swift)
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(f"Mac desktop render failed ({exc.returncode}); see the Swift error above.") from exc
+
+    outputs = []
+    for source, _rect, _decorate, raw in scenes:
+        output = output_path_for_source(output_dir, source)
+        run(["magick", str(raw), "-alpha", "off", "-colorspace", "sRGB", "-depth", "8", "-type", "TrueColor",
+             "-strip", f"PNG24:{output}"])
         outputs.append(output)
     if args.validate and outputs:
         validate(output_dir, "mac")
@@ -626,7 +744,7 @@ def resolve_configured_args(args, config, defaults):
 def resolve_config_paths(args, config_path):
     resolved = argparse.Namespace(**vars(args))
     config_dir = Path(config_path).expanduser().resolve().parent
-    for key in ("source", "output_root", "copy_file", "preview", "design_file"):
+    for key in ("source", "output_root", "copy_file", "preview", "design_file", "mac_app", "mac_wallpaper"):
         value = getattr(resolved, key, None)
         if not value:
             continue
@@ -869,6 +987,15 @@ def main():
     parser.add_argument("--preview-size", default="886x1920", help="Preview export size, for example 886x1920.")
     parser.add_argument("--preview-fps", type=int, default=30)
     parser.add_argument("--preview-max-duration", type=int, default=30)
+    mac = parser.add_argument_group("Mac screenshots")
+    mac.add_argument("--mac-style", choices=["desktop", "fill"], default="desktop",
+                     help="desktop: window on a Mac desktop with menu bar and Dock (default). fill: scale the capture to the whole screenshot.")
+    mac.add_argument("--mac-app", help="The app's .app bundle (name and icon) or an icon image for the Dock.")
+    mac.add_argument("--mac-app-name", help="App name shown in bold in the menu bar. Default: the bundle's name.")
+    mac.add_argument("--mac-menus", help="Comma-separated menu titles. Default: File,Edit,View,Window,Help.")
+    mac.add_argument("--mac-wallpaper", help="Desktop wallpaper image. Default: the screenshot background colours.")
+    mac.add_argument("--mac-clock", help="Menu bar clock text. Default: today's date at 9:41.")
+    mac.add_argument("--mac-dock", help="Comma-separated .app bundles or icon images kept in the Dock. Default: common macOS apps.")
     parser.add_argument("--check", action="store_true", help="Validate existing screenshots or the selected creative profile.")
     parser.add_argument("--validate", action=argparse.BooleanOptionalAction, default=True)
     args = parser.parse_args()
@@ -936,15 +1063,18 @@ def main():
     if args.check:
         raise SystemExit(validate_existing_images(args.source))
 
-    args.frames_bin = str(require_frames_bin(args.frames_bin))
-
     jobs = collect_jobs(args.source)
     if not jobs:
         print("No screenshots found. Use PNG, JPG, JPEG, HEIC, HEIF, TIF, or TIFF.")
         return
+    require_unique_output_names(jobs)
+    kinds = [kind for kind, _size in expand_export_targets(args.kind)]
+    if needs_frames(jobs, kinds):
+        args.frames_bin = str(require_frames_bin(args.frames_bin))
+    preflight_mac_desktop(args, jobs, kinds)
 
     background_colors = resolve_background_palette(args.background, args.theme)
-    if not args.config:
+    if not args.config and "--background" not in explicit_options:
         background_colors = prompt_for_background(background_colors)
 
     total = 0

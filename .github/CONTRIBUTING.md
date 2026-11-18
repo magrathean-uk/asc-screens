@@ -39,6 +39,7 @@ For a focused change, start with its test module:
 | --- | --- |
 | Rendering, sizing, validation, manifests and previews | `python3 -m unittest test_asc_frame_maker -v` |
 | Guided input choices | `python3 -m unittest test_asc_gen_cli -v` |
+| Mac desktop layout, Dock, menu bar and renderer spec | `python3 -m unittest test_asc_mac_desktop -v` |
 | Fingerprinting and upload command construction | `python3 -m unittest test_asc_screens_ci -v` |
 | Creative design, icon palettes, gradient finishes, device frames, media generation and validation | `python3 -m unittest test_asc_design test_asc_icon_palette test_asc_finish test_asc_device_frames test_asc_creative test_asc_asset_cli -v` |
 | Curated per-app campaigns and crop provenance | `python3 -m unittest test_asc_campaign -v` |

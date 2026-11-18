@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import subprocess
 import unittest
@@ -55,6 +56,21 @@ class AscScreensCiTests(unittest.TestCase):
         self.assertEqual(config.output_root, (Path(tmp) / "out").resolve())
         self.assertEqual(config.device_type_map["iphone"], "IPHONE_69")
         self.assertEqual(config.device_type_map["ipad"], "IPAD_PRO_3GEN_129")
+        self.assertEqual(config.device_type_map["mac"], "DESKTOP")
+
+    def test_default_design_inputs_include_mac_wallpaper_and_icon_but_not_bundles(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asc_config = root / "asc-screens.json"
+            asc_config.write_text(json.dumps({"source": "shots", "mac_wallpaper": "wall.png", "mac_app": "icon.png"}), encoding="utf-8")
+            ci_config = root / ".asc-screens-ci.json"
+            ci_config.write_text(json.dumps({"app_id": "123", "version": "1.2.3"}), encoding="utf-8")
+            with_icon = load_ci_config(ci_config).design_inputs
+            asc_config.write_text(json.dumps({"source": "shots", "mac_app": "/Applications/Tescam.app"}), encoding="utf-8")
+            with_bundle = load_ci_config(ci_config).design_inputs
+
+        self.assertEqual([Path(value).name for value in with_icon[1:]], ["shots", "wall.png", "icon.png"])
+        self.assertEqual([Path(value).name for value in with_bundle[1:]], ["shots"])
 
     def test_upload_screenshots_runs_asc_commands_from_manifest(self):
         with TemporaryDirectory() as tmp:
@@ -289,6 +305,7 @@ class AscScreensCiTests(unittest.TestCase):
             (path / "01.png").touch()
             manifest["locales"] = {"default": {"iphone": [{"filename": "01.png", "path": str(path / "01.png")}], "mac": [{"filename": "01.png"}]}}
             (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            config = dataclasses.replace(config, device_type_map={**config.device_type_map, "mac": ""})
             calls = []
             with self.assertRaisesRegex(SystemExit, "device_type_map.*mac"):
                 upload_screenshots(config, runner=self.fake_asc_runner(calls))

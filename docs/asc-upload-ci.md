@@ -44,7 +44,8 @@ Keep `.asc-screens-ci.json` beside `asc-screens.json` in the app repository:
   ],
   "device_type_map": {
     "iphone": "IPHONE_69",
-    "ipad": "IPAD_PRO_3GEN_129"
+    "ipad": "IPAD_PRO_3GEN_129",
+    "mac": "DESKTOP"
   }
 }
 ```
@@ -64,10 +65,12 @@ If `design_inputs` is absent or empty, the wrapper uses the renderer configurati
 plus its `source` and `copy_file` values when present. Those default input paths
 resolve relative to the renderer configuration, including when it is nested.
 The `design_file` and its referenced `icon` also contribute when present; icon
-paths resolve beside the design JSON.
+paths resolve beside the design JSON. A Mac `mac_wallpaper` and a `mac_app` icon
+image contribute too; a `mac_app` `.app` bundle does not.
 Explicit `design_inputs` resolve relative to the CI configuration. Shared
-renderer code (`asc_screens.py`, `asc_creative.py`, `asc_design.py`, and
-`asc_device_frames.py`, and `asc_finish.py`) always
+renderer code (`asc_screens.py`, `asc_mac_desktop.py`, `asc_creative.py`,
+`asc_design.py`, `asc_device_frames.py`, `asc_finish.py` and
+`asc_icon_palette.py`) always
 contributes, including with explicit inputs, so template changes invalidate old
 completion markers. External tool versions and unrelated app source code are
 not automatically included.
@@ -76,10 +79,11 @@ and generated framing/staging directories. Explicit `design_inputs` are hashed
 as declared; exclude generated outputs when choosing them.
 
 The default locale is `en-US`; it applies to non-localized output recorded as
-`default` in `asc_upload.json`. Other locale keys are used directly. The two device
-mappings shown above are the defaults in this checkout. There is no default Mac
-mapping. Before uploading Mac screenshots, configure a `mac` mapping verified
-against your installed `asc` and target app. Legacy `--preview` videos are not
+`default` in `asc_upload.json`. Other locale keys are used directly. The three device
+mappings shown above are the defaults in this checkout; `DESKTOP` is the Mac
+App Store slot (`APP_DESKTOP`) in `asc` 5.14.3. Mac screenshots belong to the
+app's macOS version, so set `"platform": "MAC_OS"` in the CI configuration for a
+Mac upload. Legacy `--preview` videos are not
 uploaded by this wrapper. Creative videos from `--asset` are uploaded to the
 Asset Library.
 

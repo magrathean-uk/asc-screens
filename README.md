@@ -12,12 +12,12 @@
 
 ## Overview
 
-asc-screens frames phone and tablet captures, scales Mac captures, adds optional captions, validates image dimensions and transparency, and writes review and upload manifests. It installs from a source checkout and runs locally or in CI; there is no published package.
+asc-screens frames phone and tablet captures, places Mac window captures on a Mac desktop, adds optional captions, validates image dimensions and transparency, and writes review and upload manifests. It installs from a source checkout and runs locally or in CI; there is no published package.
 
 ## Features
 
 - Frames iPhone and iPad captures with Apple Frames onto a generated background
-- Scales Mac captures directly to the target dimensions, without a frame
+- Places Mac window captures in the middle of a Mac desktop with the menu bar and the Dock
 - Optional caption templates driven by a locale-keyed copy file
 - Validates image format, configured dimensions and PNG transparency
 - Writes an HTML contact sheet plus JSON review and upload manifests
@@ -35,6 +35,8 @@ Requirements:
 - ImageMagick, with `magick` on `PATH`
 - Apple Frames CLI and its device assets, with `frames` on `PATH`, or supplied with `--frames-bin` or the `ASC_SCREENS_FRAMES_BIN` environment variable. Check assets with `frames doctor`; `FRAMES_ASSETS` can select an existing asset directory.
 - `ffmpeg` on `PATH`, for App-preview video generation only
+- Swift (Xcode or the Command Line Tools), for Mac desktop screenshots only. Apple
+  Frames is needed only when iPhone or iPad screenshots are built.
 
 The minimum is Python 3.11 because Python 3.10 reaches its scheduled end of
 support in October 2026.
@@ -59,20 +61,20 @@ The direct command accepts a directory containing nested `iphone/`, `ipad/`, or 
 asc-screens ./source
 ```
 
-The default output is `asc_out/`. Phone and tablet inputs are framed with Apple Frames and composited onto a generated background. Mac inputs are resized directly to the selected dimensions, which can change their aspect ratio; they do not receive frames, backgrounds or captions. The CLI still checks for Apple Frames before any screenshot build, including Mac-only builds. Existing generated folders named `asc_out` and `_framed` are excluded from source discovery.
+The default output is `asc_out/`. Phone and tablet inputs are framed with Apple Frames and composited onto a generated background. Mac inputs are placed on a Mac desktop; see [Mac screenshots](#mac-screenshots). Existing generated folders named `asc_out` and `_framed` are excluded from source discovery.
 
 Choose a device lane and output options explicitly:
 
 ```bash
 asc-screens ./source --kind iphone-latest
 asc-screens ./source --kind ipad-latest --template title-bottom
-asc-screens ./source --kind mac
+asc-screens ./source --kind mac --mac-app /Applications/Tescam.app
 asc-screens ./source --background '#060914,#1A26FF,#20D7E8'
 ```
 
 Available `--kind` values are `iphone`, `ipad`, `mac`, `all`, `iphone-latest`, `ipad-latest`, `mac-latest`, and `all-latest`. The default targets in this checkout are `1320x2868` for iPhone, `2064x2752` for iPad, and `2880x1800` for Mac.
 
-Without a configuration file, the direct CLI prompts for a background even when `--background` is supplied. Configuration mode skips this prompt. Backgrounds accept one to three hex colours. One colour expands to a three-stop palette; two colours receive an interpolated middle stop. The built-in themes are `teslatlas` and `purple`.
+Without a configuration file or `--background`, the direct CLI prompts for a background in an interactive terminal. Backgrounds accept one to three hex colours. One colour expands to a three-stop palette; two colours receive an interpolated middle stop. The built-in themes are `teslatlas` and `purple`.
 
 The caption templates are `plain`, `title-top`, and `title-bottom`. A JSON copy file maps locales to `title` and `subtitle` values:
 
@@ -100,6 +102,49 @@ Without a copy file, caption templates use the source filename as the title and 
 
 Caption templates reserve a separate area for the measured title and subtitle,
 then fit the device frame in the remaining space so the frame cannot cover text.
+
+### Mac screenshots
+
+Mac screenshots look like a normal Mac screen: the app window sits in the middle
+of the desktop, with the menu bar at the top and the Dock at the bottom. The menu
+bar shows the Apple menu, the app name in bold, its menus, Wi-Fi, Spotlight,
+Control Centre and the clock. The Dock holds common macOS apps, the app itself with
+its running dot, and the Trash. Fonts, symbols and app icons come from macOS
+itself, so the result matches the Mac it was made on.
+
+Capture each window on its own and put the captures in a `mac/` folder. Either
+capture works:
+
+- a window capture with the macOS shadow (Shift-Command-4, then Space, then click
+  the window) is placed as it is;
+- an opaque window image, such as an app-generated capture, gets rounded corners
+  and a window shadow.
+
+Retina captures keep their natural size when they fit, and shrink only to fit
+between the menu bar and the Dock. Output uses the accepted 16:10 Mac sizes,
+`2880x1800` by default.
+
+```bash
+asc-screens ./source --kind mac --mac-app /Applications/Tescam.app
+asc-screens ./source --kind mac --mac-app icon_1024.png --mac-app-name Tescam --mac-menus "File,Edit,View,Window,Help"
+asc-screens ./source --kind mac --mac-app /Applications/Tescam.app --mac-wallpaper wallpaper.heic
+```
+
+- `--mac-app`: the app's `.app` bundle, which gives the name and the real icon, or an
+  icon image. A square icon without transparent corners gets the macOS icon shape.
+- `--mac-app-name`: the bold name in the menu bar. Required with an icon image.
+- `--mac-menus`: menu titles, comma separated. Default: `File,Edit,View,Window,Help`.
+- `--mac-wallpaper`: a wallpaper image, cropped to fill. Default: a gradient from the
+  screenshot background colours.
+- `--mac-clock`: the clock text. Default: today's date at 9:41.
+- `--mac-dock`: the `.app` bundles or icon images kept in the Dock, comma separated.
+  Apps missing on this Mac are left out.
+- `--mac-style fill`: the previous behaviour, which scales the capture to the whole
+  screenshot without a desktop.
+
+Menu bar text and the Dock switch between light and dark to suit the wallpaper.
+JSON configuration accepts the same options with underscores, for example
+`"mac_app": "/Applications/Tescam.app"` and `"mac_menus": ["File", "Edit"]`.
 
 ### Repeatable configuration
 
@@ -132,7 +177,7 @@ Guided mode is available from a checkout with:
 ./asc-gen.py
 ```
 
-It prompts for the source directory, build or check mode, device lane, background, copy file, template, locale, and output directory. The installed `asc-gen` command invokes the same guided wrapper. It is interactive and does not provide a separate noninteractive help flow.
+It prompts for the source directory, build or check mode, device lane, the Mac app and its name when Mac captures are found, background, copy file, template, locale, and output directory. The installed `asc-gen` command invokes the same guided wrapper. It is interactive and does not provide a separate noninteractive help flow.
 
 ### Output and validation
 
@@ -156,7 +201,7 @@ Validation accepts PNG, JPG, and JPEG files only. It checks the local target tab
 - iPad: `1488x2266`, `1668x2420`, `2048x2732`, `2064x2752`;
 - Mac: `1280x800`, `1440x900`, `2560x1600`, `2880x1800`.
 
-Inspect the output count and contact sheet after a run. Some frame or composite failures are skipped; inputs with the same filename stem can overwrite each other. The renderer does not clear old output files. Local checks do not establish current App Store submission acceptance.
+Inspect the output count and contact sheet after a run. Some frame or composite failures are skipped. Two inputs for the same device with the same filename stem stop the run before rendering, because they would write the same output file. The renderer does not clear old output files. Local checks do not establish current App Store submission acceptance.
 
 ### App-preview video
 
@@ -359,9 +404,9 @@ By default the fingerprint includes the `asc-screens` config, its `source`, and
 its `copy_file`, `design_file`, and referenced icon when present. CI settings and
 the shared renderer code always contribute, so a template improvement invalidates
 previous completion markers. Set `design_inputs` to control the artwork paths or
-glob patterns. The default upload mapping is `iphone` to `IPHONE_69` and `ipad` to
-`IPAD_PRO_3GEN_129`; Mac is generated locally but has no default CI device mapping.
-Use the `device_type_map` field for any upload mapping required by the external CLI.
+glob patterns. The default upload mapping is `iphone` to `IPHONE_69`, `ipad` to
+`IPAD_PRO_3GEN_129` and `mac` to `DESKTOP`; Mac uploads also need
+`"platform": "MAC_OS"`. Use the `device_type_map` field to change a mapping.
 
 Print the cache key without building or uploading:
 

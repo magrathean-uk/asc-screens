@@ -16,9 +16,10 @@ from asc_screens import load_config
 DEFAULT_DEVICE_TYPE_MAP = {
     "iphone": "IPHONE_69",
     "ipad": "IPAD_PRO_3GEN_129",
+    "mac": "DESKTOP",
 }
 
-_RENDERER_FILES = ("asc_screens.py", "asc_creative.py", "asc_design.py", "asc_device_frames.py", "asc_finish.py", "asc_icon_palette.py")
+_RENDERER_FILES = ("asc_screens.py", "asc_mac_desktop.py", "asc_creative.py", "asc_design.py", "asc_device_frames.py", "asc_finish.py", "asc_icon_palette.py")
 
 
 def renderer_fingerprint():
@@ -67,9 +68,10 @@ def resolve_root_path(root, value):
 
 def default_design_inputs(asc_screens_config, asc_config):
     inputs = [asc_screens_config]
-    for key in ("source", "copy_file", "design_file"):
+    for key in ("source", "copy_file", "design_file", "mac_wallpaper", "mac_app"):
         value = asc_config.get(key)
-        if value:
+        # A .app bundle is identified by its name; hashing a whole bundle is needless work.
+        if value and not (key == "mac_app" and str(value).lower().endswith(".app")):
             inputs.append(value)
     return tuple(inputs)
 

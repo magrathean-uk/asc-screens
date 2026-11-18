@@ -8,11 +8,16 @@ from asc_creative import (
     discover_creative_sources, process_creative_assets,
 )
 
+from asc_mac_desktop import bundle_name, is_bundle
 from asc_screens import (
     collect_jobs,
+    default_frames_bin,
+    needs_frames,
+    preflight_mac_desktop,
     process_kind,
     require_frames_bin,
     resolve_background_palette,
+    require_unique_output_names,
     resolve_localized_builds,
     validate_existing_images,
     expand_export_targets,
@@ -128,6 +133,21 @@ def prompt_locale():
     return value or None
 
 
+def prompt_mac_app():
+    """Menu bar name and Dock icon for Mac desktop screenshots."""
+    while True:
+        value = ask("Mac app: .app bundle or icon image for the Dock. Enter to skip the icon", "")
+        app = Path(value).expanduser() if value else None
+        if app is None or app.exists():
+            break
+        print(f"Not found: {app}")
+    default_name = (bundle_name(app) or app.stem) if app is not None and is_bundle(app) else None
+    while True:
+        name = ask("Mac app name for the menu bar", default_name)
+        if name:
+            return (str(app) if app else None), name
+
+
 def prompt_asset():
     while True:
         try:
@@ -204,7 +224,10 @@ def main():
     if mode == "check":
         raise SystemExit(validate_existing_images(source))
 
+    require_unique_output_names(jobs)
     kinds = prompt_kinds(jobs)
+    resolved_kinds = [resolved for kind in kinds for resolved, _size in expand_export_targets(kind)]
+    mac_app, mac_app_name = (prompt_mac_app() if "mac" in resolved_kinds and counts["mac"] else (None, None))
     background_colors = prompt_background()
     copy_file = prompt_copy_file()
     template = prompt_template("top" if not copy_file else "plain")
@@ -215,10 +238,14 @@ def main():
     print(f"Theme: {', '.join(background_colors)}")
     args = Namespace(
         output_root=output_root,
-        frames_bin=str(require_frames_bin()),
+        frames_bin=str(require_frames_bin()) if needs_frames(jobs, resolved_kinds) else default_frames_bin(),
         frame_color="Silver",
         validate=True,
+        mac_style="desktop",
+        mac_app=mac_app,
+        mac_app_name=mac_app_name,
     )
+    preflight_mac_desktop(args, jobs, resolved_kinds)
 
     total = 0
     outputs = []

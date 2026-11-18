@@ -5,6 +5,19 @@ records behavior present in the checkout; it does not identify a published relea
 
 ## Unreleased
 
+- Mac screenshots now look like a normal Mac screen: the window capture sits in
+  the middle of a desktop with the menu bar (Apple menu, app name, menus, status
+  icons, clock) and the Dock (common apps, the app with its running dot, Trash).
+  System fonts, SF Symbols and real app icons are drawn by a Swift/AppKit renderer.
+  `--mac-app`, `--mac-app-name`, `--mac-menus`, `--mac-wallpaper`, `--mac-clock`
+  and `--mac-dock` configure it; `--mac-style fill` keeps the old full-canvas output.
+- Mac-only builds no longer require Apple Frames.
+- An explicit `--background` no longer triggers the background prompt.
+- Inputs that would write the same output file stop the run instead of
+  silently overwriting each other.
+- `asc-screens-ci` maps Mac screenshots to `DESKTOP` by default and fingerprints
+  the Mac wallpaper and icon.
+
 - Added a studio finish with smooth full-canvas gradients derived automatically
   from local app icon colours, rounded icons, and device silhouette shadows.
   The background stays quiet beside copy and gains colour behind the product,
