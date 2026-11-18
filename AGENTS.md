@@ -14,7 +14,7 @@ asc-screens is a local command-line workflow that generates, validates, frames a
 
 ## Device and output behaviour
 
-The direct and guided flows support iPhone, iPad and Mac. Caption templates apply to framed iPhone and iPad output. Mac screenshots place the window capture on a Mac desktop with the menu bar and Dock (`--mac-style desktop`, the default; needs Swift) or scale it to fill (`--mac-style fill`). The CI default device map covers iPhone, iPad and Mac (`DESKTOP`, with `platform` `MAC_OS`).
+The direct and guided flows support iPhone, iPad and Mac. Caption templates apply to framed iPhone and iPad output. Mac screenshots place the window capture on a Mac desktop with the menu bar and Dock, shown on an Apple Frames MacBook Pro M5 16 in Silver (`--mac-style framed`, the default; needs Swift and Apple Frames), the desktop alone (`desktop`) or the capture scaled to fill (`fill`). The CI default device map covers iPhone, iPad and Mac (`DESKTOP`, with `platform` `MAC_OS`).
 
 Generated artefacts include output screenshots, frame intermediates, review manifests, preview files and `.asc-screens-cache/`. Image discovery excludes paths containing `asc_out` or `_framed`, including in check mode, so export checks can use a separate output copy.
 

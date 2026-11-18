@@ -17,7 +17,7 @@ asc-screens frames phone and tablet captures, places Mac window captures on a Ma
 ## Features
 
 - Frames iPhone and iPad captures with Apple Frames onto a generated background
-- Places Mac window captures in the middle of a Mac desktop with the menu bar and the Dock
+- Places Mac window captures in the middle of a Mac desktop with the menu bar and the Dock, shown on a framed MacBook Pro
 - Optional caption templates driven by a locale-keyed copy file
 - Validates image format, configured dimensions and PNG transparency
 - Writes an HTML contact sheet plus JSON review and upload manifests
@@ -36,7 +36,8 @@ Requirements:
 - Apple Frames CLI and its device assets, with `frames` on `PATH`, or supplied with `--frames-bin` or the `ASC_SCREENS_FRAMES_BIN` environment variable. Check assets with `frames doctor`; `FRAMES_ASSETS` can select an existing asset directory.
 - `ffmpeg` on `PATH`, for App-preview video generation only
 - Swift (Xcode or the Command Line Tools), for Mac desktop screenshots only. Apple
-  Frames is needed only when iPhone or iPad screenshots are built.
+  Frames is needed for iPhone, iPad and framed Mac screenshots, not for
+  `--mac-style desktop` or `fill`.
 
 The minimum is Python 3.11 because Python 3.10 reaches its scheduled end of
 support in October 2026.
@@ -105,8 +106,12 @@ then fit the device frame in the remaining space so the frame cannot cover text.
 
 ### Mac screenshots
 
-Mac screenshots look like a normal Mac screen: the app window sits in the middle
-of the desktop, with the menu bar at the top and the Dock at the bottom. The menu
+Mac screenshots look like a normal Mac screen on a MacBook Pro: the app window
+sits in the middle of the desktop, with the menu bar at the top and the Dock at
+the bottom. The screen is drawn at the native size of a MacBook Pro M5 16-inch
+(3456x2234, default scaling, with the taller menu bar beside the camera notch),
+framed by Apple Frames in Silver (`--frame-color "Space Black"` for the other
+finish) and placed on the screenshot background. The menu
 bar shows the Apple menu, the app name in bold, its menus, Wi-Fi, Spotlight,
 Control Centre and the clock. The Dock holds common macOS apps, the app itself with
 its running dot, and the Trash. Fonts, symbols and app icons come from macOS
@@ -122,7 +127,7 @@ capture works:
 
 Retina captures keep their natural size when they fit, and shrink only to fit
 between the menu bar and the Dock. Output uses the accepted 16:10 Mac sizes,
-`2880x1800` by default.
+`2880x1800` by default. Framing takes a few seconds per screenshot.
 
 ```bash
 asc-screens ./source --kind mac --mac-app /Applications/Tescam.app
@@ -139,8 +144,9 @@ asc-screens ./source --kind mac --mac-app /Applications/Tescam.app --mac-wallpap
 - `--mac-clock`: the clock text. Default: today's date at 9:41.
 - `--mac-dock`: the `.app` bundles or icon images kept in the Dock, comma separated;
   each must exist. Default apps missing on this Mac are left out.
-- `--mac-style fill`: the previous behaviour, which scales the capture to the whole
-  screenshot without a desktop.
+- `--mac-style desktop`: the desktop alone, filling the screenshot, without the
+  MacBook. `--mac-style fill`: the previous behaviour, which scales the capture to
+  the whole screenshot without a desktop.
 
 Menu bar text and the Dock switch between light and dark to suit the wallpaper.
 JSON configuration accepts the same options with underscores, for example

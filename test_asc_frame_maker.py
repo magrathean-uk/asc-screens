@@ -530,12 +530,13 @@ class AscFrameMakerTests(unittest.TestCase):
 
             self.assertEqual(outputs, [output])
 
-    def test_frames_are_needed_only_for_iphone_or_ipad_jobs(self):
+    def test_frames_are_needed_for_iphone_ipad_and_framed_mac_jobs(self):
         mac_only = [ImageJob(Path("a.png"), "mac")]
         mixed = [*mac_only, ImageJob(Path("b.png"), "iphone")]
-        self.assertFalse(needs_frames(mac_only, ["iphone", "ipad", "mac"]))
-        self.assertFalse(needs_frames(mixed, ["mac"]))
-        self.assertTrue(needs_frames(mixed, ["iphone", "mac"]))
+        self.assertFalse(needs_frames(mac_only, ["iphone", "ipad", "mac"], "desktop"))
+        self.assertFalse(needs_frames(mixed, ["mac"], "fill"))
+        self.assertTrue(needs_frames(mixed, ["iphone", "mac"], "desktop"))
+        self.assertTrue(needs_frames(mac_only, ["mac"], "framed"))
 
     def test_duplicate_output_names_are_reported_per_device(self):
         jobs = [

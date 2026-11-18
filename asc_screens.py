@@ -53,6 +53,7 @@ TARGETS = {
 FRAME_FIT = {
     "iphone": (1080, 2450),
     "ipad": (1840, 2400),
+    "mac": (2640, 1640),
 }
 
 TEMPLATES = {
@@ -396,9 +397,13 @@ def require_unique_output_names(jobs):
         raise SystemExit(f"These screenshots would overwrite each other's output; rename one of each pair: {detail}")
 
 
-def needs_frames(jobs, kinds):
-    """Apple Frames is only needed when iPhone or iPad screenshots will be framed."""
-    framed = {"iphone", "ipad"} & set(kinds)
+def mac_style(args):
+    return getattr(args, "mac_style", None) or "framed"
+
+
+def needs_frames(jobs, kinds, mac="framed"):
+    """Apple Frames is needed for iPhone, iPad and framed Mac screenshots."""
+    framed = {"iphone", "ipad", *(("mac",) if mac == "framed" else ())} & set(kinds)
     return any(job.device in framed for job in jobs)
 
 
@@ -513,7 +518,7 @@ def process_kind(args, jobs, kind, background_colors, target_size=None, template
 
 
 def process_mac(args, jobs, target_size=None, background_colors=None):
-    if (getattr(args, "mac_style", None) or "desktop") == "desktop":
+    if mac_style(args) in {"framed", "desktop"}:
         return process_mac_desktop(args, jobs, target_size=target_size, background_colors=background_colors)
     target_w, target_h = target_size or target_for_kind("mac")
     output_dir = Path(args.output_root) / "mac"
@@ -586,7 +591,7 @@ def mac_wallpaper_command(options, width, height, background_colors, output):
 
 def preflight_mac_desktop(args, jobs=None, kinds=("mac",)):
     """Check Swift and the Mac desktop settings before any rendering starts."""
-    if (getattr(args, "mac_style", None) or "desktop") != "desktop" or "mac" not in kinds:
+    if mac_style(args) not in {"framed", "desktop"} or "mac" not in kinds:
         return None
     if jobs is not None and not any(job.device == "mac" for job in jobs):
         return None
@@ -600,22 +605,36 @@ def preflight_mac_desktop(args, jobs=None, kinds=("mac",)):
 
 
 def process_mac_desktop(args, jobs, target_size=None, background_colors=None):
-    """Place each Mac window capture on a desktop with the menu bar and the Dock."""
+    """Place each Mac window capture on a desktop with the menu bar and the Dock.
+
+    framed (default): the desktop is shown on a MacBook Pro screen, framed with
+    Apple Frames and placed on the background. desktop: the desktop alone.
+    """
     mac_jobs = [job for job in jobs if job.device == "mac"]
     if not mac_jobs:
         return []
     swift, options = preflight_mac_desktop(args)
-    target_w, target_h = target_size or target_for_kind("mac")
+    framed = mac_style(args) == "framed"
+    output_size = target_size or target_for_kind("mac")
     output_dir = Path(args.output_root) / "mac"
     work_dir = Path(args.output_root) / "_framed" / "mac"
     output_dir.mkdir(parents=True, exist_ok=True)
     work_dir.mkdir(parents=True, exist_ok=True)
+    if framed:
+        target_w, target_h = mac_desktop.MACBOOK_SCREEN
+        layout_scale = {"logical_width": mac_desktop.MACBOOK_LOGICAL_WIDTH, "menubar_pt": mac_desktop.NOTCH_MENUBAR_PT}
+        scene_dir = work_dir / "screens"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        target_w, target_h = output_size
+        layout_scale = {}
+        scene_dir = output_dir
 
     wallpaper = work_dir / f"wallpaper-{target_w}x{target_h}.png"
     run(mac_wallpaper_command(options, target_w, target_h, background_colors, wallpaper))
     entries = mac_desktop.dock_entries(options, opaque_corner=lambda path: corner_alpha(path) >= 0.5)
     try:
-        layout = mac_desktop.desktop_layout((target_w, target_h), entries)
+        layout = mac_desktop.desktop_layout((target_w, target_h), entries, **layout_scale)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     dock_x, dock_y, dock_w, dock_h = (round(value) for value in layout.dock_rect)
@@ -637,10 +656,24 @@ def process_mac_desktop(args, jobs, target_size=None, background_colors=None):
 
     outputs = []
     for source, _rect, _decorate, raw in scenes:
-        output = output_path_for_source(output_dir, source)
+        screen = output_path_for_source(scene_dir, source)
         run(["magick", str(raw), "-alpha", "off", "-colorspace", "sRGB", "-depth", "8", "-type", "TrueColor",
-             "-strip", f"PNG24:{output}"])
-        outputs.append(output)
+             "-strip", f"PNG24:{screen}"])
+        if not framed:
+            outputs.append(screen)
+            continue
+        command = [str(args.frames_bin), "frame", "-o", str(work_dir)]
+        if args.frame_color:
+            command += ["-c", args.frame_color]
+        try:
+            run([*command, str(screen)])
+        except subprocess.CalledProcessError as exc:
+            raise SystemExit(f"Apple Frames could not frame {source} as a MacBook Pro") from exc
+        device = work_dir / f"{screen.stem}_framed.png"
+        if not device.exists():
+            raise SystemExit(f"Apple Frames wrote no MacBook frame for {source}")
+        outputs.append(composite("mac", source, device, output_dir, background_colors or DEFAULT_BACKGROUND,
+                                 target_size=output_size, copy={"title": "", "subtitle": ""}))
     if args.validate and outputs:
         validate(output_dir, "mac")
     return outputs
@@ -995,8 +1028,9 @@ def main():
     parser.add_argument("--preview-fps", type=int, default=30)
     parser.add_argument("--preview-max-duration", type=int, default=30)
     mac = parser.add_argument_group("Mac screenshots")
-    mac.add_argument("--mac-style", choices=["desktop", "fill"], default="desktop",
-                     help="desktop: window on a Mac desktop with menu bar and Dock (default). fill: scale the capture to the whole screenshot.")
+    mac.add_argument("--mac-style", choices=["framed", "desktop", "fill"], default="framed",
+                     help="framed: the window on a Mac desktop with menu bar and Dock, shown on a MacBook Pro (default). "
+                          "desktop: the same desktop without the MacBook. fill: scale the capture to the whole screenshot.")
     mac.add_argument("--mac-app", help="The app's .app bundle (name and icon) or an icon image for the Dock.")
     mac.add_argument("--mac-app-name", help="App name shown in bold in the menu bar. Default: the bundle's name.")
     mac.add_argument("--mac-menus", help="Comma-separated menu titles. Default: File,Edit,View,Window,Help.")
@@ -1076,7 +1110,7 @@ def main():
         return
     kinds = [kind for kind, _size in expand_export_targets(args.kind)]
     require_unique_output_names([job for job in jobs if job.device in kinds])
-    if needs_frames(jobs, kinds):
+    if needs_frames(jobs, kinds, mac_style(args)):
         args.frames_bin = str(require_frames_bin(args.frames_bin))
     preflight_mac_desktop(args, jobs, kinds)
 

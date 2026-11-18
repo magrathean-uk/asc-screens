@@ -162,7 +162,8 @@ class ProcessMacDesktopTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
             sources = [root / "01.png", root / "02.png"]
-            args = Namespace(output_root=root / "out", validate=False, mac_app_name="Tescam", mac_dock=[])
+            args = Namespace(output_root=root / "out", validate=False, mac_app_name="Tescam", mac_dock=[],
+                             mac_style="desktop")
             outputs = process_mac(args, [ImageJob(path, "mac") for path in sources], target_size=(2880, 1800),
                                   background_colors=["#000000", "#111111", "#222222"])
 
@@ -174,6 +175,35 @@ class ProcessMacDesktopTests(unittest.TestCase):
         self.assertIn("-sparse-color", wallpaper_command)
         self.assertEqual(len(flatten), 2)
         self.assertTrue(flatten[0][-1].startswith("PNG24:"))
+
+    @patch("asc_screens.composite", side_effect=lambda kind, source, framed, output_dir, *a, **k: output_dir / source.name)
+    @patch("asc_screens.region_brightness", return_value=0.2)
+    @patch("asc_screens.corner_alpha", return_value=1.0)
+    @patch("asc_screens.image_size", return_value=(2880, 1800))
+    @patch("asc_screens.shutil.which", return_value="/usr/bin/swift")
+    @patch("asc_screens.mac_desktop.render")
+    @patch("asc_screens.run")
+    def test_framed_style_renders_macbook_screen_then_frames_and_composites(self, run_mock, render_mock, _which,
+                                                                            _size, _alpha, _bright, composite_mock):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            framed = root / "out" / "_framed" / "mac" / "01_framed.png"
+            framed.parent.mkdir(parents=True)
+            framed.touch()
+            args = Namespace(output_root=root / "out", validate=False, mac_app_name="Tescam", mac_dock=[],
+                             frames_bin="frames", frame_color="Silver")
+            outputs = process_mac(args, [ImageJob(root / "01.png", "mac")], target_size=(2880, 1800),
+                                  background_colors=["#000000", "#111111", "#222222"])
+
+        spec = render_mock.call_args.args[0]
+        self.assertEqual((spec["width"], spec["height"]), mac.MACBOOK_SCREEN)
+        self.assertEqual(spec["menubar"]["height"], 74)
+        frames_command = run_mock.call_args_list[-1].args[0]
+        self.assertEqual(frames_command[:2], ["frames", "frame"])
+        self.assertIn("Silver", frames_command)
+        self.assertEqual(composite_mock.call_args.args[:3], ("mac", root / "01.png", framed))
+        self.assertEqual(composite_mock.call_args.kwargs["target_size"], (2880, 1800))
+        self.assertEqual([path.name for path in outputs], ["01.png"])
 
     @patch("asc_screens.shutil.which", return_value=None)
     def test_desktop_style_explains_missing_swift(self, _which):

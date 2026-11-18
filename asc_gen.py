@@ -238,10 +238,10 @@ def main():
     print(f"Theme: {', '.join(background_colors)}")
     args = Namespace(
         output_root=output_root,
-        frames_bin=str(require_frames_bin()) if needs_frames(jobs, resolved_kinds) else default_frames_bin(),
+        frames_bin=str(require_frames_bin()) if needs_frames(jobs, resolved_kinds, "framed") else default_frames_bin(),
         frame_color="Silver",
         validate=True,
-        mac_style="desktop",
+        mac_style="framed",
         mac_app=mac_app,
         mac_app_name=mac_app_name,
     )

@@ -31,6 +31,13 @@ WINDOW_GAP_PT = 22
 WINDOW_SIDE_PT = 80
 WINDOW_RADIUS_PT = 16
 
+# Framed screenshots show the desktop on a MacBook Pro M5 16-inch (Apple Frames):
+# its native 3456x2234 panel at the default 1728x1117-point scaling, with the
+# taller menu bar of a display with a camera notch.
+MACBOOK_SCREEN = (3456, 2234)
+MACBOOK_LOGICAL_WIDTH = 1728
+NOTCH_MENUBAR_PT = 37
+
 DEFAULT_MENUS = ("File", "Edit", "View", "Window", "Help")
 DEFAULT_DOCK_APPS = (
     "/System/Library/CoreServices/Finder.app",
@@ -161,11 +168,11 @@ class DesktopLayout:
     window_area: tuple[float, float, float, float]
 
 
-def desktop_layout(target_size, entries):
+def desktop_layout(target_size, entries, logical_width=LOGICAL_WIDTH, menubar_pt=MENUBAR_PT):
     """Menu bar, Dock and the free window area, in output pixels with a top-left origin."""
     width, height = target_size
-    s = width / LOGICAL_WIDTH
-    menubar = round(MENUBAR_PT * s)
+    s = width / logical_width
+    menubar = round(menubar_pt * s)
     tile = DOCK_TILE_PT * s
     gap = DOCK_TILE_GAP_PT * s
     separator_count = sum(1 for entry in entries if entry["kind"] == "trash")
