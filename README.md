@@ -412,7 +412,10 @@ the shared renderer code always contribute, so a template improvement invalidate
 previous completion markers. Set `design_inputs` to control the artwork paths or
 glob patterns. The default upload mapping is `iphone` to `IPHONE_69`, `ipad` to
 `IPAD_PRO_3GEN_129` and `mac` to `DESKTOP`; Mac uploads also need
-`"platform": "MAC_OS"`. Use the `device_type_map` field to change a mapping.
+`"platform": "MAC_OS"`. Use the `device_type_map` field to change a mapping; each
+value must belong to its family (`IPHONE_*`, `IPAD_*`, `DESKTOP`), so `IPHONE_67` is a
+valid iPhone override and `IPHONE_69` for an iPad set is refused. The wrapper deletes the
+previous `asc_upload.json` before building and uploads only the manifest that build wrote.
 
 Print the cache key without building or uploading:
 

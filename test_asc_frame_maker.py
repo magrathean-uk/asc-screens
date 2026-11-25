@@ -359,6 +359,17 @@ class AscFrameMakerTests(unittest.TestCase):
         self.assertEqual(layout.layers[0].height, 330)
         self.assertGreater(layout.frame_top, layout.layers[0].top + 330)
 
+    def test_changelog_claims_match_caption_wrapping_and_mac_default(self):
+        # Two long words that cannot share a line still wrap one per line, so the release note
+        # must not promise that a one-word last line never happens.
+        self.assertEqual(wrap_caption("Multiplatform compatibility", 26), "Multiplatform\ncompatibility")
+        changelog = (Path(__file__).parent / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertNotIn("no longer leaves a one-word last line", changelog)
+        self.assertIn("reduces one-word last lines where the words fit", changelog)
+        # The default Mac style is framed; only `fill` exports without a frame.
+        self.assertNotIn("configured Mac target without a frame", changelog)
+        self.assertIn("`--mac-style fill` adds no frame", changelog)
+
     def test_wrap_caption_balances_lines_instead_of_leaving_a_one_word_last_line(self):
         # Found in the e2e render: "Review, trim and export Tesla clips" wrapped
         # at 34 columns left "clips" alone on the second line of every screenshot.

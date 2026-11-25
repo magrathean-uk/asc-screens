@@ -7,7 +7,8 @@ records behavior present in the checkout; it does not identify a published relea
 
 ## v2.2.0
 
-- Caption wrapping now balances the lines, so a title or subtitle no longer leaves a one-word last line.
+- Caption wrapping now balances the lines, which reduces one-word last lines where the words fit
+  the caption width (two long words can still land on separate lines).
 - Added an opt-in golden-image regression check, `ASC_GOLDEN=1 python3 -m unittest test_asc_golden -v`.
   It renders synthetic fixtures (iPhone with a caption, iPad, Mac framed, desktop and fill) through
   ImageMagick, Apple Frames and the Swift/AppKit renderer, and compares them with committed
@@ -28,6 +29,17 @@ records behavior present in the checkout; it does not identify a published relea
 - `asc-screens-ci` maps Mac screenshots to `DESKTOP` by default, refuses to mix
   Mac and iPhone/iPad sets with the wrong platform before uploading, and
   fingerprints the Mac wallpaper, app icon and Dock icons.
+- A screenshot build that produces nothing (every input skipped, or no input matching `--kind`)
+  now exits with an error, and every screenshot build removes the previous `asc_upload.json`
+  first. `asc-screens-ci` also removes it before building, so only the current build's
+  manifest can reach a `--replace` upload.
+- `asc-screens-ci` now checks the platform and device type of each screenshot set before building
+  any command: iPhone and iPad sets need platform `IOS` (not `TV_OS` or `VISION_OS`), Mac sets need
+  `MAC_OS`, and `device_type_map` values must belong to the family (`IPHONE_*`, `IPAD_*`, `DESKTOP`,
+  with an optional `APP_` prefix). Same-family overrides such as `IPHONE_67` still work.
+- The golden check validates the full-size output (opaque, App Store size) before comparing, also in
+  update mode, bounds its subprocess calls and timeout recovery, and ignores an `ASC_GOLDEN_OUT`
+  inside the checkout.
 
 - Added a studio finish with smooth full-canvas gradients derived automatically
   from local app icon colours, rounded icons, and device silhouette shadows.
@@ -78,7 +90,8 @@ records behavior present in the checkout; it does not identify a published relea
   an upload manifest.
 - Locale copy files group screenshots for upload; iPhone and iPad caption templates
   place text above or below the frame.
-- Mac exports resize screenshots to the configured Mac target without a frame.
+- Mac exports resize screenshots to the configured Mac target; `--mac-style fill` adds no frame
+  (the default `framed` style is described under v2.2.0).
 - Preview-video export uses FFmpeg to produce H.264 video with silent AAC audio.
 - `asc-screens-ci` fingerprints configured inputs and uses completion markers to
   gate replacement uploads through an external `asc` executable.
