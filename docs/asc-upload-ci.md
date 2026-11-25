@@ -22,7 +22,8 @@ First build locally with `asc-screens --config asc-screens.json` and inspect the
 images, output count and `asc_review.html`. Use a fresh output directory when
 changing input sets: the renderer does not remove stale images, and the uploader
 passes whole screenshot directories to `asc`. Preflight rejects unlisted
-screenshot images and missing manifest files before an upload can replace a set.
+screenshot images, missing manifest files and files whose content no longer matches the manifest's
+`sha256` before an upload can replace a set.
 Creative entries are uploaded individually from the manifest.
 
 ## Configuration
@@ -103,6 +104,18 @@ replaced; this covers a build that wrote no manifest and another build writing i
 same time. Builds no longer delete the previous manifest; a failed, empty or zero-output build
 exits 1 and leaves it untouched, and a successful build replaces it. `--dry-run` inspects an
 existing manifest (including a creative one) and does not need a run id.
+
+### Content binding
+
+Every screenshot and creative asset entry in `asc_upload.json` carries a `sha256` of the file as
+the build wrote it. Preflight (the wrapper, `--dry-run` on an existing manifest, and a direct
+upload) recomputes each hash, again before the first replacement, and refuses a missing hash or a
+mismatch, naming the file, before any command is built. So a rebuild that rendered into the previous
+screenshots' paths and then failed (for example writing the contact sheet) cannot leave a manifest
+that accepts the changed images: rebuild instead. A manifest written before content binding has no
+hashes and is refused the same way; rebuild it. The renderer writes `asc_upload.json` and
+`asc_review.json` to a sibling temporary file and atomically replaces them, so a symlink there is
+replaced rather than followed and a failed write leaves the previous manifest byte-identical.
 Legacy `--preview` videos are not
 uploaded by this wrapper. Creative videos from `--asset` are uploaded to the
 Asset Library.

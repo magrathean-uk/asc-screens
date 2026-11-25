@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from asc_creative import RUN_ID_ENV
+from asc_creative import RUN_ID_ENV, file_sha256
 from asc_screens import load_config
 
 from asc_mac_desktop import split_list
@@ -300,6 +300,15 @@ def asc_locale(config, locale):
     return config.default_locale if locale == "default" else locale
 
 
+def check_content_hash(path, entry):
+    """Refuse a file whose bytes differ from the sha256 the manifest recorded when it was written."""
+    recorded = entry.get("sha256")
+    if not isinstance(recorded, str) or not recorded:
+        raise SystemExit(f"Manifest entry for {path} has no sha256; the manifest predates content binding, rebuild it")
+    if file_sha256(path) != recorded:
+        raise SystemExit(f"{path} changed since the manifest was written (sha256 mismatch); rebuild before uploading")
+
+
 def preflight_upload_manifest(config, run_id=None):
     """Validate the entire local handoff before any authenticated or replacing call.
 
@@ -361,6 +370,7 @@ def preflight_upload_manifest(config, run_id=None):
                     recorded = resolve_root_path(config.root, entry["path"]).resolve()
                     if recorded != path:
                         raise SystemExit(f"Manifest screenshot path does not match its set: {recorded}")
+                check_content_hash(path, entry)
                 declared.add(path)
             actual = {path.resolve() for path in directory.rglob("*") if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg"}}
             if len(declared) != len(entries) or actual != declared:
@@ -374,6 +384,7 @@ def preflight_upload_manifest(config, run_id=None):
         suffixes = {"image": {".png", ".jpg", ".jpeg"}, "video": {".mp4", ".m4v", ".mov"}}
         if not path.is_file() or path.suffix.lower() not in suffixes[entry["media_type"]]:
             raise SystemExit(f"Missing or unsupported creative asset: {path}")
+        check_content_hash(path, entry)
         placements = entry.get("placements", [])
         if not isinstance(placements, list) or any(item not in CREATIVE_PLACEMENTS for item in placements):
             raise SystemExit(f"Unsupported creative placement for {path}")

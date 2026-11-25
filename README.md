@@ -191,7 +191,9 @@ Images go under `asc_out/<family>/`, or `asc_out/<locale>/<family>/` with locale
 
 - `asc_review.html`, a visual contact sheet;
 - `asc_review.json`, an ordered review manifest;
-- `asc_upload.json`, grouped by locale and device family for an upload tool.
+- `asc_upload.json`, grouped by locale and device family for an upload tool, with a `sha256` per
+  screenshot that upload preflight checks. Both manifests are replaced atomically (a symlink is
+  replaced, not followed).
 
 Use `--check` to validate an existing directory of screenshot files without framing:
 
@@ -419,7 +421,9 @@ case-insensitively and with or without `APP_` (iMessage `IMESSAGE_APP_` slots ar
 wrapper run gives its build a run id, which the renderer writes into `asc_upload.json`; the upload
 refuses any manifest without that id, so another build in the same output folder can never supply
 the handoff. Do not share one output folder between concurrent runs. A failed or empty build
-leaves the previous manifest in place and the wrapper stops.
+leaves the previous manifest in place and the wrapper stops. Every manifest entry also records the
+`sha256` of its file and upload preflight refuses a changed or unhashed file, so a failed rebuild
+cannot hand off screenshots the manifest did not list; rebuild to fix it.
 
 Print the cache key without building or uploading:
 

@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import asc_mac_desktop as mac_desktop
-from asc_creative import (CREATIVE_PROFILES, check_creative_assets, load_creative_design, process_creative_assets,
+from asc_creative import (CREATIVE_PROFILES, check_creative_assets, file_sha256, load_creative_design, process_creative_assets,
+                          replace_text_file,
                           run_id_header)
 
 
@@ -928,7 +929,7 @@ def write_review_manifest(output_root, outputs):
             }
         )
     manifest_path = root / "asc_review.json"
-    manifest_path.write_text(json.dumps({"items": items}, indent=2), encoding="utf-8")
+    replace_text_file(manifest_path, json.dumps({"items": items}, indent=2))
     return manifest_path
 
 
@@ -961,10 +962,12 @@ def write_upload_manifest(output_root, outputs):
                 "slot": len(family_bucket) + 1,
                 "filename": filename,
                 "path": str(path),
+                # Upload preflight refuses the file if its bytes no longer match this hash.
+                "sha256": file_sha256(path),
             }
         )
     manifest_path = root / "asc_upload.json"
-    manifest_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    replace_text_file(manifest_path, json.dumps(payload, indent=2))
     return manifest_path
 
 

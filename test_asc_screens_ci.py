@@ -1,4 +1,7 @@
 import dataclasses
+import hashlib
+import importlib.util
+import io
 import json
 import shutil
 import subprocess
@@ -14,6 +17,23 @@ from asc_screens_ci import (
     run_ci,
     upload_screenshots,
 )
+
+
+def seal(out, manifest):
+    """Add the sha256 a real build records for every listed file that exists, as the renderer would."""
+    out = Path(out)
+    for locale, families in manifest.get("locales", {}).items():
+        for family, entries in families.items():
+            directory = out / family if locale == "default" else out / locale / family
+            for entry in entries:
+                file = directory / entry["filename"]
+                if file.is_file():
+                    entry.setdefault("sha256", hashlib.sha256(file.read_bytes()).hexdigest())
+    for entry in manifest.get("creative_assets", []):
+        file = Path(entry["path"])
+        if file.is_file():
+            entry.setdefault("sha256", hashlib.sha256(file.read_bytes()).hexdigest())
+    return manifest
 
 
 class AscScreensCiTests(unittest.TestCase):
@@ -87,7 +107,7 @@ class AscScreensCiTests(unittest.TestCase):
                 (path / "01.png").touch()
                 sets[family] = [{"filename": "01.png", "path": str(path / "01.png")}]
             manifest["locales"] = {"default": sets}
-            (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            (config.output_root / "asc_upload.json").write_text(json.dumps(seal(config.output_root, manifest)))
             calls = []
             with self.assertRaisesRegex(SystemExit, "mac screenshots cannot upload to a IOS version"):
                 upload_screenshots(config, runner=self.fake_asc_runner(calls))
@@ -101,7 +121,7 @@ class AscScreensCiTests(unittest.TestCase):
             (out / "en-GB" / "iphone" / "01.png").touch()
             (out / "asc_upload.json").write_text(
                 json.dumps(
-                    {
+                    seal(out, {
                         "locales": {
                             "en-GB": {
                                 "iphone": [
@@ -109,7 +129,7 @@ class AscScreensCiTests(unittest.TestCase):
                                 ]
                             }
                         }
-                    }
+                    })
                 ),
                 encoding="utf-8",
             )
@@ -154,7 +174,7 @@ class AscScreensCiTests(unittest.TestCase):
             (out / "iphone").mkdir(parents=True)
             (out / "iphone" / "01.png").touch()
             (out / "asc_upload.json").write_text(
-                json.dumps({"locales": {"default": {"iphone": [{"slot": 1, "filename": "01.png", "path": str(out / "iphone" / "01.png")}]}}}),
+                json.dumps(seal(out, {"locales": {"default": {"iphone": [{"slot": 1, "filename": "01.png", "path": str(out / "iphone" / "01.png")}]}}})),
                 encoding="utf-8",
             )
             ci_config = root / ".asc-screens-ci.json"
@@ -211,8 +231,8 @@ class AscScreensCiTests(unittest.TestCase):
                     (out / "en-GB" / "iphone").mkdir(parents=True)
                     (out / "en-GB" / "iphone" / "01.png").touch()
                     (out / "asc_upload.json").write_text(
-                        json.dumps({"run_id": kwargs["env"][RUN_ID_ENV],
-                                    "locales": {"en-GB": {"iphone": [{"slot": 1, "filename": "01.png", "path": str(out / "en-GB" / "iphone" / "01.png")}]}}}),
+                        json.dumps(seal(out, {"run_id": kwargs["env"][RUN_ID_ENV],
+                                    "locales": {"en-GB": {"iphone": [{"slot": 1, "filename": "01.png", "path": str(out / "en-GB" / "iphone" / "01.png")}]}}})),
                         encoding="utf-8",
                     )
                 if cmd[:3] == ["asc", "versions", "list"]:
@@ -233,7 +253,7 @@ class AscScreensCiTests(unittest.TestCase):
         asset = out / ("header.mp4" if media_type == "video" else "header.png")
         asset.touch()
         manifest = {"locales": {}, "creative_assets": [{"profile": "header", "media_type": media_type, "path": str(asset), "locale": "default", "placements": ["PRODUCT_PAGE_HEADER_ASSET"]}]}
-        (out / "asc_upload.json").write_text(json.dumps(manifest), encoding="utf-8")
+        (out / "asc_upload.json").write_text(json.dumps(seal(out, manifest)), encoding="utf-8")
         payload = {"app_id": "123", "version": "1.2.3", "output_root": "out", "default_locale": "en-GB"}
         if target:
             payload["creative_asset_target"] = target
@@ -277,7 +297,7 @@ class AscScreensCiTests(unittest.TestCase):
         with TemporaryDirectory() as tmp:
             config, manifest = self.creative_fixture(Path(tmp), {"kind": "version"}, media_type="video")
             manifest["creative_assets"][0].update({"poster_time": 1.234, "duration": 5.0})
-            (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            (config.output_root / "asc_upload.json").write_text(json.dumps(seal(config.output_root, manifest)))
             calls = []
             upload_screenshots(config, runner=self.fake_asc_runner(calls))
             setter = next(cmd for cmd in calls if "set-poster-frame" in cmd)
@@ -291,7 +311,7 @@ class AscScreensCiTests(unittest.TestCase):
             with self.subTest(value=value), TemporaryDirectory() as tmp:
                 config, manifest = self.creative_fixture(Path(tmp), media_type="video")
                 manifest["creative_assets"][0].update({"poster_time": value, "duration": 5.0})
-                (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+                (config.output_root / "asc_upload.json").write_text(json.dumps(seal(config.output_root, manifest)))
                 calls = []
                 with self.assertRaisesRegex(SystemExit, "poster_time"):
                     upload_screenshots(config, runner=self.fake_asc_runner(calls))
@@ -326,7 +346,7 @@ class AscScreensCiTests(unittest.TestCase):
             path.mkdir()
             (path / "01.png").touch()
             manifest["locales"] = {"default": {"iphone": [{"filename": "01.png", "path": str(path / "01.png")}], "mac": [{"filename": "01.png"}]}}
-            (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            (config.output_root / "asc_upload.json").write_text(json.dumps(seal(config.output_root, manifest)))
             config = dataclasses.replace(config, device_type_map={**config.device_type_map, "mac": ""})
             calls = []
             with self.assertRaisesRegex(SystemExit, "device_type_map.*mac"):
@@ -340,7 +360,7 @@ class AscScreensCiTests(unittest.TestCase):
         (path / "01.png").touch()
         manifest["creative_assets"] = []
         manifest["locales"] = {"default": {family: [{"filename": "01.png", "path": str(path / "01.png")}]}}
-        (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+        (config.output_root / "asc_upload.json").write_text(json.dumps(seal(config.output_root, manifest)))
         return dataclasses.replace(config, platform=platform, device_type_map={**config.device_type_map, **(device_type_map or {})})
 
     def test_screenshot_families_only_upload_to_their_own_platform(self):
@@ -435,7 +455,7 @@ class AscScreensCiTests(unittest.TestCase):
             (config.output_root / "iphone" / "01.png").touch()
             manifest = json.loads((config.output_root / "asc_upload.json").read_text())
             manifest["locales"]["default"]["iphone"] = [{"filename": "01.png"}]
-            (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            (config.output_root / "asc_upload.json").write_text(json.dumps(seal(config.output_root, manifest)))
             config = dataclasses.replace(config, device_type_map={**config.device_type_map, "iphone": "IPHONE_999"})
             calls = []
             with self.assertRaisesRegex(SystemExit, "IPHONE_999"):
@@ -452,7 +472,7 @@ class AscScreensCiTests(unittest.TestCase):
             (out / "ipad").mkdir(parents=True)
             (out / "ipad" / "01.png").touch()
             (out / "asc_upload.json").write_text(
-                json.dumps({"locales": {"default": {"ipad": [{"slot": 1, "filename": "01.png", "path": str(out / "ipad" / "01.png")}]}}}),
+                json.dumps(seal(out, {"locales": {"default": {"ipad": [{"slot": 1, "filename": "01.png", "path": str(out / "ipad" / "01.png")}]}}})),
                 encoding="utf-8",
             )
             ci_config = root / ".asc-screens-ci.json"
@@ -487,8 +507,8 @@ class AscScreensCiTests(unittest.TestCase):
     def write_build(out, family, run_id):
         (out / family).mkdir(parents=True, exist_ok=True)
         (out / family / "01.png").touch()
-        (out / "asc_upload.json").write_text(json.dumps(
-            {"run_id": run_id, "locales": {"default": {family: [{"slot": 1, "filename": "01.png", "path": str(out / family / "01.png")}]}}}),
+        (out / "asc_upload.json").write_text(json.dumps(seal(out,
+            {"run_id": run_id, "locales": {"default": {family: [{"slot": 1, "filename": "01.png", "path": str(out / family / "01.png")}]}}})),
             encoding="utf-8")
 
     def test_a_run_refuses_a_manifest_another_run_wrote_to_the_shared_root(self):
@@ -577,7 +597,7 @@ class AscScreensCiTests(unittest.TestCase):
             for name in ("01.png", "stale.png"):
                 (path / name).touch()
             manifest["locales"] = {"default": {"iphone": [{"filename": "01.png"}]}}
-            (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            (config.output_root / "asc_upload.json").write_text(json.dumps(seal(config.output_root, manifest)))
             calls = []
             with self.assertRaisesRegex(SystemExit, "differs from manifest"):
                 upload_screenshots(config, runner=self.fake_asc_runner(calls))
@@ -737,6 +757,229 @@ class AscScreensCiTests(unittest.TestCase):
             cache.mkdir()
             (cache / "marker.done").touch()
             self.assertEqual(first, load_ci_config(path, cache_dir=cache).fingerprint)
+
+
+
+class ManifestContentBindingTests(unittest.TestCase):
+    """The manifest is bound to the bytes it listed, and written atomically."""
+
+    @staticmethod
+    def sha(path):
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+    def config_for(self, root):
+        (root / ".asc-screens-ci.json").write_text(
+            json.dumps({"app_id": "123", "version": "1.2.3", "output_root": "out", "default_locale": "en-GB"}), encoding="utf-8")
+        return load_ci_config(root / ".asc-screens-ci.json")
+
+    def runner(self, calls):
+        return AscScreensCiTests().fake_asc_runner(calls)
+
+    def build_screenshots(self, root, content):
+        """One real renderer run (rendering mocked) into root/out; returns the output root."""
+        import asc_screens
+
+        source = root / "src"
+        (source / "iphone").mkdir(parents=True, exist_ok=True)
+        (source / "iphone" / "01.png").touch()
+        out = root / "out"
+        shot = out / "iphone" / "01.png"
+
+        def render(*args, **kwargs):
+            shot.parent.mkdir(parents=True, exist_ok=True)
+            shot.write_bytes(content)
+            return [shot]
+
+        argv = ["asc-screens", str(source), "--kind", "iphone", "--background", "#101010,#202020,#303030",
+                "--output-root", str(out)]
+        with patch("sys.argv", argv), patch("sys.stdout", new_callable=io.StringIO), \
+                patch("asc_screens.shutil.which", return_value="/usr/bin/magick"), \
+                patch("asc_screens.require_frames_bin", return_value=Path("frames")), \
+                patch("asc_screens.frame_inputs", return_value=[]), \
+                patch("asc_screens.process_kind", side_effect=render):
+            asc_screens.main()
+        return out
+
+    def test_failed_rebuild_that_changed_a_screenshot_is_refused_by_dry_run_and_upload(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = self.build_screenshots(root, b"red")
+            config = self.config_for(root)
+            self.assertTrue(run_ci(config, dry_run=True)["commands"])
+            # The rebuild renders blue into the same final path, then fails writing the contact sheet.
+            (out / "asc_review.html").unlink()
+            (out / "asc_review.html").mkdir()
+            with self.assertRaises((IsADirectoryError, PermissionError)):
+                self.build_screenshots(root, b"blue")
+            self.assertEqual((out / "iphone" / "01.png").read_bytes(), b"blue")
+            calls = []
+            with self.assertRaisesRegex(SystemExit, r"01\.png.*changed since the manifest"):
+                run_ci(config, dry_run=True)
+            with self.assertRaisesRegex(SystemExit, r"01\.png.*changed since the manifest"):
+                upload_screenshots(config, runner=self.runner(calls))
+            self.assertEqual(calls, [])
+
+    def test_screenshot_manifest_entry_without_a_hash_is_refused_with_a_rebuild_message(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = self.build_screenshots(root, b"red")
+            manifest = json.loads((out / "asc_upload.json").read_text(encoding="utf-8"))
+            del manifest["locales"]["default"]["iphone"][0]["sha256"]
+            (out / "asc_upload.json").write_text(json.dumps(manifest), encoding="utf-8")
+            config = self.config_for(root)
+            calls = []
+            with self.assertRaisesRegex(SystemExit, r"01\.png.*no sha256.*rebuild"):
+                run_ci(config, dry_run=True)
+            with self.assertRaisesRegex(SystemExit, r"01\.png.*no sha256.*rebuild"):
+                upload_screenshots(config, runner=self.runner(calls))
+            self.assertEqual(calls, [])
+
+    def creative_manifest(self, root, **entry_fields):
+        out = root / "out"
+        out.mkdir()
+        asset = out / "header.png"
+        asset.write_bytes(b"original")
+        entry = {"profile": "header", "media_type": "image", "path": str(asset), "locale": "default",
+                 "placements": ["PRODUCT_PAGE_HEADER_ASSET"], "sha256": self.sha(asset), **entry_fields}
+        entry = {key: value for key, value in entry.items() if value is not None}
+        (out / "asc_upload.json").write_text(json.dumps({"locales": {}, "creative_assets": [entry]}), encoding="utf-8")
+        return asset
+
+    def test_creative_asset_changed_after_its_manifest_was_written_is_refused(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            asset = self.creative_manifest(root)
+            config = self.config_for(root)
+            self.assertTrue(run_ci(config, dry_run=True)["commands"])
+            asset.write_bytes(b"changed")
+            calls = []
+            with self.assertRaisesRegex(SystemExit, r"header\.png.*changed since the manifest"):
+                run_ci(config, dry_run=True)
+            with self.assertRaisesRegex(SystemExit, r"header\.png.*changed since the manifest"):
+                upload_screenshots(config, runner=self.runner(calls))
+            self.assertEqual(calls, [])
+
+    def test_creative_asset_without_a_hash_is_refused_with_a_rebuild_message(self):
+        for value in (None, "", 7):
+            with self.subTest(sha256=value), TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                self.creative_manifest(root, sha256=value)
+                config = self.config_for(root)
+                if value is None:
+                    expected = r"header\.png.*no sha256.*rebuild"
+                else:
+                    expected = r"header\.png.*(no sha256|changed since the manifest)"
+                calls = []
+                with self.assertRaisesRegex(SystemExit, expected):
+                    run_ci(config, dry_run=True)
+                with self.assertRaisesRegex(SystemExit, expected):
+                    upload_screenshots(config, runner=self.runner(calls))
+                self.assertEqual(calls, [])
+
+    def test_a_file_changed_while_the_run_looks_up_the_version_is_not_replaced(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = self.build_screenshots(root, b"red")
+            config = self.config_for(root)
+            calls = []
+            base = self.runner(calls)
+
+            def runner(cmd, **kwargs):
+                if cmd[1:3] == ["localizations", "list"]:
+                    (out / "iphone" / "01.png").write_bytes(b"blue")
+                return base(cmd, **kwargs)
+
+            with self.assertRaisesRegex(SystemExit, r"01\.png.*changed since the manifest"):
+                upload_screenshots(config, runner=runner)
+            self.assertFalse([cmd for cmd in calls if "--replace" in cmd])
+
+    def test_creative_exporter_records_the_hash_of_each_final_asset(self):
+        import asc_creative
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.png"
+            source.write_bytes(b"original")
+            output = root / "exports"
+
+            def compose(source_path, staged_path, size, design):
+                Path(staged_path).write_bytes(b"composed")
+                return {"title": "t", "output": str(staged_path), "validated": True}
+
+            with patch("asc_design.render_design", side_effect=compose), \
+                    patch.object(asc_creative, "validate_creative_file", return_value=()):
+                files = asc_creative.process_creative_assets(source, output, "header", design={"app_name": "A", "title": "t"})
+            for name in ("asc_upload.json", "asc_creative_review.json"):
+                entries = json.loads((output / name).read_text(encoding="utf-8"))["creative_assets"]
+                self.assertEqual([entry["sha256"] for entry in entries], [self.sha(path) for path in files])
+            config = self.config_for(root)
+            config = dataclasses.replace(config, output_root=output.resolve())
+            self.assertTrue(run_ci(config, dry_run=True)["commands"])
+
+
+class AtomicManifestWriteTests(unittest.TestCase):
+    def outputs(self, root):
+        shot = root / "iphone" / "01.png"
+        shot.parent.mkdir(parents=True)
+        shot.write_bytes(b"png")
+        return [shot]
+
+    def test_a_symlinked_manifest_is_replaced_not_followed(self):
+        from asc_screens import write_review_manifest, write_upload_manifest
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / "out"
+            outputs = self.outputs(root)
+            archive = Path(tmp) / "archive"
+            archive.mkdir()
+            for name, write in (("asc_upload.json", write_upload_manifest), ("asc_review.json", write_review_manifest)):
+                target = archive / name
+                target.write_text("reviewed handoff", encoding="utf-8")
+                (root / name).symlink_to(target)
+                write(root, outputs)
+                self.assertEqual(target.read_text(encoding="utf-8"), "reviewed handoff", name)
+                self.assertFalse((root / name).is_symlink(), name)
+                self.assertIn("items" if "review" in name else "locales", json.loads((root / name).read_text(encoding="utf-8")))
+
+    def test_a_write_failure_leaves_the_previous_manifest_byte_identical(self):
+        resource = __import__("resource") if importlib.util.find_spec("resource") else None
+        if resource is None:
+            self.skipTest("needs POSIX resource limits")
+        import signal
+        from asc_screens import write_review_manifest, write_upload_manifest
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / "out"
+            outputs = self.outputs(root)
+            previous = b'{"previous": "' + b"x" * 60 + b'"}'
+            soft, hard = resource.getrlimit(resource.RLIMIT_FSIZE)
+            old_handler = signal.signal(signal.SIGXFSZ, signal.SIG_IGN)
+            try:
+                for name, write in (("asc_upload.json", write_upload_manifest), ("asc_review.json", write_review_manifest)):
+                    (root / name).write_bytes(previous)
+                    resource.setrlimit(resource.RLIMIT_FSIZE, (16, hard))
+                    try:
+                        with self.assertRaises(OSError):
+                            write(root, outputs)
+                    finally:
+                        resource.setrlimit(resource.RLIMIT_FSIZE, (soft, hard))
+                    self.assertEqual((root / name).read_bytes(), previous, name)
+            finally:
+                signal.signal(signal.SIGXFSZ, old_handler)
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["asc_review.json", "asc_upload.json", "iphone"])
+
+    def test_a_failed_replace_leaves_the_previous_manifest_and_no_temporary_file(self):
+        from asc_screens import write_upload_manifest
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp) / "out"
+            outputs = self.outputs(root)
+            (root / "asc_upload.json").write_text("previous", encoding="utf-8")
+            with patch("os.replace", side_effect=OSError("denied")):
+                with self.assertRaises(OSError):
+                    write_upload_manifest(root, outputs)
+            self.assertEqual((root / "asc_upload.json").read_text(encoding="utf-8"), "previous")
+            self.assertEqual(sorted(path.name for path in root.iterdir()), ["asc_upload.json", "iphone"])
 
 
 if __name__ == "__main__":

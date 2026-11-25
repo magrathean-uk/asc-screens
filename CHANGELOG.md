@@ -43,6 +43,15 @@ records behavior present in the checkout; it does not identify a published relea
   (checked against the `asc screenshots sizes --all` catalogue of asc 5.14.3, so `IPHONE_999`,
   `IPAD_BOGUS` and `IMESSAGE_APP_DESKTOP` are refused). Values are canonicalised as asc does: case
   and surrounding spaces are ignored and `APP_` is optional, so `iphone_67` and `desktop` work.
+- Upload manifests are bound to file content: every screenshot and creative asset entry in
+  `asc_upload.json` records a `sha256`, and `asc-screens-ci` (normal run, existing-manifest
+  `--dry-run`, direct upload) recomputes it before any command is built and again before the first
+  replacement. A changed file or an entry without a hash (a manifest from before this change) is
+  refused with the file named and a prompt to rebuild, so a rebuild that failed after rendering
+  cannot leave a handoff that accepts the changed screenshots.
+- `asc_upload.json` and `asc_review.json` are written to a sibling temporary file and atomically
+  replaced, so a symlinked manifest is replaced rather than followed and a failed write leaves the
+  previous manifest unchanged.
 - The golden check validates the full-size output (opaque, App Store size) before comparing, also in
   update mode, bounds its subprocess calls and timeout recovery, kills a run's process group on
   Ctrl-C, and ignores an `ASC_GOLDEN_OUT` inside the checkout (and a system temp directory inside it,

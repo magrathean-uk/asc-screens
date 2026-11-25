@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
-from tempfile import TemporaryDirectory
+from tempfile import TemporaryDirectory, mkstemp
 from urllib.parse import quote
 
 
@@ -313,6 +313,35 @@ def run_id_header():
     return {"run_id": run_id} if run_id else {}
 
 
+def file_sha256(path):
+    """Hex SHA-256 of a file's bytes, read in chunks."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def replace_text_file(path, text):
+    """Write text to a sibling temporary file, then atomically replace ``path`` with it.
+
+    A symlink at ``path`` is replaced rather than followed, and a failed write leaves the
+    previous file untouched (the temporary file is removed)."""
+    path = Path(path)
+    descriptor, name = mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    pending = Path(name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(pending, 0o644)
+        os.replace(pending, path)
+    except BaseException:
+        pending.unlink(missing_ok=True)
+        raise
+
+
 def _write_creative_reviews(root, entries):
     upload = {**run_id_header(), "locales": {}, "creative_assets": entries}
     (root / "asc_upload.json").write_text(json.dumps(upload, indent=2) + "\n", encoding="utf-8")
@@ -443,6 +472,8 @@ def process_creative_assets(source, output_root, profile, fit="contain", backgro
             problems = validate_creative_file(temporary, name)
             if problems:
                 raise RuntimeError(f"Creative validation failed for {path} ({name}): {'; '.join(problems)}")
+            # Upload preflight refuses the asset if its bytes no longer match this hash.
+            entry["sha256"] = file_sha256(temporary)
             entries.append(entry)
             outputs.append(final)
             staged_files.append((temporary, final))
