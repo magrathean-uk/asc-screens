@@ -171,12 +171,16 @@ def title_from_source(source):
     return title or stem
 
 
+IDENTIFY_TIMEOUT = 60
+
+
 def image_size(path):
     result = subprocess.run(
         ["magick", "identify", "-format", "%w %h", str(path)],
         check=True,
         text=True,
         capture_output=True,
+        timeout=IDENTIFY_TIMEOUT,
     )
     width, height = result.stdout.split()
     return int(width), int(height)
@@ -326,6 +330,7 @@ def has_alpha(path):
         check=True,
         text=True,
         capture_output=True,
+        timeout=IDENTIFY_TIMEOUT,
     )
     return "a" in result.stdout.lower()
 

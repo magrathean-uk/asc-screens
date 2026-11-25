@@ -11,10 +11,12 @@ Environment:
     ASC_GOLDEN            1 to run; anything else skips the whole module.
     ASC_GOLDEN_UPDATE     1 to rewrite the references from the current render.
     ASC_GOLDEN_OUT        folder for failure artefacts (actual and diff images).
-                          Default: <system temp>/asc-screens-golden.
+                          Default: <system temp>/asc-screens-golden. A folder inside this
+                          checkout is ignored (with a note) so a check never dirties the repo.
     ASC_SCREENS_FRAMES_BIN  Apple Frames CLI, as for the tool itself.
 
-How the comparison works: the output must have the exact expected pixel size, then a
+How the comparison works: the full-size output must pass the screenshot validator (opaque,
+an App Store size) and have the exact expected pixel size, then a
 copy scaled to SCALE_PERCENT is compared with the reference by two measures (see
 COMPARE_NOTES). References are the scaled copies, which keeps them small. The
 references describe one macOS, font, ImageMagick and Apple Frames combination; when a
@@ -32,7 +34,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from asc_screens import default_font, find_frames_bin, image_size
+from asc_screens import default_font, find_frames_bin, image_size, validate_screenshot_file
 
 ROOT = Path(__file__).resolve().parent
 GOLDEN_DIR = ROOT / "tests" / "golden"
@@ -62,27 +64,67 @@ COMPARE_NOTES = (
 
 RENDER_TIMEOUT = 600
 TOOL_TIMEOUT = 120
+# Longest wait for pipes and the child to settle after a timeout kill.
+KILL_GRACE = 5
 
 
 def failure_dir():
-    return Path(os.environ.get("ASC_GOLDEN_OUT") or Path(tempfile.gettempdir()) / "asc-screens-golden")
+    """Where failure images go: ASC_GOLDEN_OUT, unless it points into this checkout, then the temp default."""
+    default = Path(tempfile.gettempdir()) / "asc-screens-golden"
+    value = os.environ.get("ASC_GOLDEN_OUT")
+    if not value:
+        return default
+    path = Path(value).expanduser().resolve()
+    if path == ROOT or path.is_relative_to(ROOT):
+        print(f"ASC_GOLDEN_OUT={value} is inside the checkout; writing failure images to {default} instead",
+              file=sys.stderr)
+        return default
+    return path
+
+
+def kill_group(proc):
+    """SIGKILL the child's process group; fall back to the child itself if the group kill fails."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except OSError:
+        try:
+            proc.kill()
+        except OSError:
+            pass
+
+
+def _text(value):
+    return value.decode("utf-8", "replace") if isinstance(value, bytes) else value
 
 
 def run_bounded(command, timeout, **kwargs):
     """subprocess.run that kills the whole process group on timeout (a stuck swift or frames child
-    holding the pipes would otherwise keep run() waiting past its timeout). Raises TimeoutExpired."""
-    with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                          start_new_session=True, **kwargs) as proc:
+    holding the pipes would otherwise keep run() waiting past its timeout). Raises TimeoutExpired.
+    Recovery is bounded too: the pipe drain after the kill waits at most KILL_GRACE seconds."""
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                            start_new_session=True, **kwargs)
+    try:
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
+            kill_group(proc)
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except OSError:
-                pass
-            stdout, stderr = proc.communicate()
+                stdout, stderr = proc.communicate(timeout=KILL_GRACE)
+            except subprocess.TimeoutExpired as late:
+                # Something still holds a pipe open; keep what was read and move on.
+                stdout, stderr = _text(late.stdout), _text(late.stderr)
             raise subprocess.TimeoutExpired(command, timeout, output=stdout, stderr=stderr)
         return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
+    finally:
+        for pipe in (proc.stdout, proc.stderr):
+            try:
+                pipe.close()
+            except (OSError, ValueError):
+                pass
+        try:
+            proc.wait(timeout=KILL_GRACE)
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def probe_frames(frames):
@@ -99,6 +141,19 @@ def probe_frames(frames):
     return None
 
 
+def probe_xcode():
+    """None when the Xcode Command Line Tools are installed, otherwise the reason."""
+    try:
+        result = run_bounded(["xcode-select", "-p"], TOOL_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return f"xcode-select -p timed out after {TOOL_TIMEOUT}s"
+    except OSError as exc:
+        return f"xcode-select cannot start: {exc}"
+    if result.returncode != 0:
+        return "Swift needs the Xcode Command Line Tools: xcode-select --install"
+    return None
+
+
 def skip_reason():
     if not ENABLED:
         return "golden-image check is opt-in: set ASC_GOLDEN=1"
@@ -107,8 +162,9 @@ def skip_reason():
     for tool in ("magick", "swift"):
         if not shutil.which(tool):
             return f"{tool} not found on PATH"
-    if subprocess.run(["xcode-select", "-p"], capture_output=True).returncode != 0:
-        return "Swift needs the Xcode Command Line Tools: xcode-select --install"
+    reason = probe_xcode()
+    if reason:
+        return reason
     if not default_font():
         return "the caption font (Arial) is missing from this Mac"
     frames = find_frames_bin()
@@ -237,6 +293,10 @@ class GoldenRenderTests(unittest.TestCase):
 
     def check_case(self, case):
         output = self.render(case)
+        # Validate the full-size output first: normalising below strips alpha, so a transparent
+        # render would otherwise pass. This also guards references written in update mode.
+        report = validate_screenshot_file(output, case["device"])
+        self.assertTrue(report.ok, f"{case['name']}: output fails screenshot validation: {'; '.join(report.problems)}")
         expected_size = tuple(case["size"])
         self.assertEqual(image_size(output), expected_size, f"{case['name']}: output pixel size")
 

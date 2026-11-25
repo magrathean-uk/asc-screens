@@ -43,6 +43,7 @@ For a focused change, start with its test module:
 | Fingerprinting and upload command construction | `python3 -m unittest test_asc_screens_ci -v` |
 | Creative design, icon palettes, gradient finishes, device frames, media generation and validation | `python3 -m unittest test_asc_design test_asc_icon_palette test_asc_finish test_asc_device_frames test_asc_creative test_asc_asset_cli -v` |
 | Curated per-app campaigns and crop provenance | `python3 -m unittest test_asc_campaign -v` |
+| Golden-check plumbing: output validation, subprocess deadlines, failure folder | `python3 -m unittest test_asc_golden_helpers -v` |
 | Real rendering against committed reference images (opt-in, see below) | `ASC_GOLDEN=1 python3 -m unittest test_asc_golden -v` |
 
 ### Golden-image check
@@ -55,12 +56,12 @@ needs `magick`, `swift`, the Arial caption font and a working Apple Frames CLI
 (`frames doctor` must pass), and skips with the reason when one is missing. The run takes
 about a minute on an idle Mac, several under load.
 
-Each output must have the exact pixel size; a 25% copy is then compared with
+Each full-size output must pass the screenshot validator (opaque, an App Store size) and have the exact pixel size; a 25% copy is then compared with
 `tests/golden/references/` by changed-pixel share (at 6% colour fuzz) and DSSIM. The thresholds in
 `test_asc_golden.py` tolerate anti-aliasing noise and fail on a moved frame, a missing
 caption, menu bar or Dock, or a shifted window. A failure writes the actual, reference,
 diff and full-size images to `ASC_GOLDEN_OUT` (default: a folder under the system
-temporary directory) and prints their paths.
+temporary directory; a folder inside the checkout is ignored in favour of the default) and prints their paths.
 
 The references match one macOS, font, ImageMagick and Apple Frames combination. After an
 intended rendering change or an OS or tool upgrade, inspect the diffs, then rewrite them
