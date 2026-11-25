@@ -1,9 +1,11 @@
 # Releases
 
-The package metadata currently declares version `2.1.1`. The unreleased section
+The package metadata currently declares version `2.2.0`. The unreleased section
 records behavior present in the checkout; it does not identify a published release.
 
 ## Unreleased
+
+## v2.2.0
 
 - Caption wrapping now balances the lines, so a title or subtitle no longer leaves a one-word last line.
 - Added an opt-in golden-image regression check, `ASC_GOLDEN=1 python3 -m unittest test_asc_golden -v`.

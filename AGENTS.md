@@ -23,7 +23,7 @@ Generated artefacts include output screenshots, frame intermediates, review mani
 ImageMagick supplies validation and rendering, Apple Frames supplies device framing, and FFmpeg supports `--preview`. The upload handoff also depends on `asc` and account access.
 
 ```bash
-python3 -m py_compile asc_screens.py asc_frame_maker.py asc_gen.py asc_screens_ci.py
+python3 -m py_compile asc_screens.py asc_frame_maker.py asc_gen.py asc_screens_ci.py asc_mac_desktop.py
 python3 -m unittest discover -v
 ASC_GOLDEN=1 python3 -m unittest test_asc_golden -v  # opt-in golden-image render check, local only
 asc-screens --check ./existing-screenshots
