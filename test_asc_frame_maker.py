@@ -27,6 +27,7 @@ from asc_screens import (
     load_localizations,
     composite,
     title_from_source,
+    wrap_caption,
     overlay_text_command,
     output_path_for_source,
     resolve_background_palette,
@@ -356,6 +357,17 @@ class AscFrameMakerTests(unittest.TestCase):
         measure.assert_called_once()
         self.assertEqual(layout.layers[0].height, 330)
         self.assertGreater(layout.frame_top, layout.layers[0].top + 330)
+
+    def test_wrap_caption_balances_lines_instead_of_leaving_a_one_word_last_line(self):
+        # Found in the e2e render: "Review, trim and export Tesla clips" wrapped
+        # at 34 columns left "clips" alone on the second line of every screenshot.
+        wrapped = wrap_caption("Review, trim and export Tesla clips", 34)
+        lines = wrapped.split("\n")
+        self.assertEqual(len(lines), 2)
+        self.assertGreater(len(lines[1].split()), 1)
+        self.assertLessEqual(max(map(len, lines)), 34)
+        self.assertEqual(" ".join(lines), "Review, trim and export Tesla clips")
+        self.assertEqual(wrap_caption("Short copy", 34), "Short copy")
 
     def test_caption_layout_rejects_text_that_leaves_no_frame_space(self):
         with self.assertRaisesRegex(ValueError, "shorten the title or subtitle"):

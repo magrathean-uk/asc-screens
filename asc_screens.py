@@ -816,7 +816,17 @@ def default_font():
 
 
 def wrap_caption(text, width):
-    lines = textwrap.wrap(text, width=width, break_long_words=False, break_on_hyphens=False)
+    def wrap(limit):
+        return textwrap.wrap(text, width=limit, break_long_words=False, break_on_hyphens=False)
+
+    lines = wrap(width)
+    # Balance wrapped copy: narrow the limit while the line count holds, so the
+    # last line is not a single stray word.
+    for limit in range(width - 1, 0, -1):
+        trial = wrap(limit)
+        if len(trial) != len(lines) or len(lines) < 2:
+            break
+        lines = trial
     return "\n".join(lines) if lines else text
 
 
