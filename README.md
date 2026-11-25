@@ -414,7 +414,7 @@ glob patterns. The default upload mapping is `iphone` to `IPHONE_69`, `ipad` to
 `IPAD_PRO_3GEN_129` and `mac` to `DESKTOP`; Mac uploads also need
 `"platform": "MAC_OS"`. Use the `device_type_map` field to change a mapping; each
 value must be a screenshot slot asc supports for its family (`IPHONE_*`, `IPAD_*`, `DESKTOP`),
-case-insensitively and with or without `APP_`, so `iphone_67` is a valid iPhone override while
+case-insensitively and with or without `APP_` (iMessage `IMESSAGE_APP_` slots are accepted too), so `iphone_67` is a valid iPhone override while
 `IPHONE_69` for an iPad set and `IPHONE_999` are refused before anything is replaced. Each
 wrapper run gives its build a run id, which the renderer writes into `asc_upload.json`; the upload
 refuses any manifest without that id, so another build in the same output folder can never supply

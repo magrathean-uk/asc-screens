@@ -35,14 +35,14 @@ records behavior present in the checkout; it does not identify a published relea
 - `asc-screens-ci` gives every build run a unique run id (`ASC_SCREENS_RUN_ID`), which the renderer
   records in `asc_upload.json`. An upload refuses a manifest without its own run id, both before
   planning and again before the first replacement, so output another build wrote into the same
-  output folder is never uploaded. `--dry-run` on an existing manifest and creative manifests do
-  not need a run id.
+  output folder is never uploaded. An explicit `--dry-run` on an existing manifest (including a
+  creative one) does not need a run id.
 - `asc-screens-ci` now checks the platform and device type of each screenshot set before running
   any command: iPhone and iPad sets need platform `IOS` (not `TV_OS` or `VISION_OS`), Mac sets need
   `MAC_OS`, and every `device_type_map` value must be a screenshot slot asc supports for its family
   (checked against the `asc screenshots sizes --all` catalogue of asc 5.14.3, so `IPHONE_999`,
   `IPAD_BOGUS` and `IMESSAGE_APP_DESKTOP` are refused). Values are canonicalised as asc does: case
-  and spaces are ignored and `APP_` is optional, so `iphone_67` and `desktop` work.
+  and surrounding spaces are ignored and `APP_` is optional, so `iphone_67` and `desktop` work.
 - The golden check validates the full-size output (opaque, App Store size) before comparing, also in
   update mode, bounds its subprocess calls and timeout recovery, kills a run's process group on
   Ctrl-C, and ignores an `ASC_GOLDEN_OUT` inside the checkout (and a system temp directory inside it,

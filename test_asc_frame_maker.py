@@ -8,6 +8,7 @@ from tempfile import TemporaryDirectory
 from argparse import Namespace
 from unittest.mock import patch
 
+from asc_creative import RUN_ID_ENV
 from asc_screens import (
     APP_STORE_IPHONE_TARGETS,
     APP_STORE_MAC_TARGETS,
@@ -650,11 +651,11 @@ class AscFrameMakerTests(unittest.TestCase):
             (out / "iphone").mkdir()
             shot = out / "iphone" / "01.png"
             shot.touch()
-            with patch.dict("os.environ", {"ASC_SCREENS_RUN_ID": "run-a"}):
+            with patch.dict("os.environ", {RUN_ID_ENV: "run-a"}):
                 write_upload_manifest(out, [shot])
             self.assertEqual(json.loads((out / "asc_upload.json").read_text(encoding="utf-8"))["run_id"], "run-a")
             with patch.dict("os.environ", {}, clear=False) as env:
-                env.pop("ASC_SCREENS_RUN_ID", None)
+                env.pop(RUN_ID_ENV, None)
                 write_upload_manifest(out, [shot])
             self.assertNotIn("run_id", json.loads((out / "asc_upload.json").read_text(encoding="utf-8")))
 
@@ -663,7 +664,7 @@ class AscFrameMakerTests(unittest.TestCase):
 
         with TemporaryDirectory() as tmp:
             out = Path(tmp)
-            with patch.dict("os.environ", {"ASC_SCREENS_RUN_ID": "run-a"}):
+            with patch.dict("os.environ", {RUN_ID_ENV: "run-a"}):
                 _write_creative_reviews(out, [])
             self.assertEqual(json.loads((out / "asc_upload.json").read_text(encoding="utf-8"))["run_id"], "run-a")
 

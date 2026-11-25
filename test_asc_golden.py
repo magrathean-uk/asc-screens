@@ -117,6 +117,7 @@ def run_bounded(command, timeout, **kwargs):
             finished = True
         except subprocess.TimeoutExpired:
             kill_group(proc)
+            finished = True  # already killed; a second killpg could hit a recycled pid
             try:
                 stdout, stderr = proc.communicate(timeout=KILL_GRACE)
             except subprocess.TimeoutExpired as late:

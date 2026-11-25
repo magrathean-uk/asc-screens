@@ -12,8 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import asc_mac_desktop as mac_desktop
-from asc_creative import (CREATIVE_PROFILES, check_creative_assets, current_run_id, load_creative_design,
-                          process_creative_assets)
+from asc_creative import (CREATIVE_PROFILES, check_creative_assets, load_creative_design, process_creative_assets,
+                          run_id_header)
 
 
 APP_STORE_IPHONE_TARGETS = (
@@ -945,7 +945,7 @@ def write_upload_manifest(output_root, outputs):
         return None
     root = Path(output_root)
     # asc-screens-ci names its run so it can tell its own manifest from another build's.
-    payload = {"run_id": current_run_id(), "locales": {}} if current_run_id() else {"locales": {}}
+    payload = {**run_id_header(), "locales": {}}
     for path in sorted((Path(path) for path in outputs)):
         relative = path.relative_to(root)
         if len(relative.parts) == 3:

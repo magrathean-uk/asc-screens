@@ -7,6 +7,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
+from asc_creative import RUN_ID_ENV
 from asc_screens_ci import (
     compute_design_fingerprint,
     load_ci_config,
@@ -210,7 +211,7 @@ class AscScreensCiTests(unittest.TestCase):
                     (out / "en-GB" / "iphone").mkdir(parents=True)
                     (out / "en-GB" / "iphone" / "01.png").touch()
                     (out / "asc_upload.json").write_text(
-                        json.dumps({"run_id": kwargs["env"]["ASC_SCREENS_RUN_ID"],
+                        json.dumps({"run_id": kwargs["env"][RUN_ID_ENV],
                                     "locales": {"en-GB": {"iphone": [{"slot": 1, "filename": "01.png", "path": str(out / "en-GB" / "iphone" / "01.png")}]}}}),
                         encoding="utf-8",
                     )
@@ -430,9 +431,8 @@ class AscScreensCiTests(unittest.TestCase):
         # A valid iPad set sorts before the invalid iPhone slot; it must not be replaced first.
         with TemporaryDirectory() as tmp:
             config = self.screenshot_fixture(Path(tmp), "ipad", "IOS")
-            for family in ("iphone",):
-                (config.output_root / family).mkdir()
-                (config.output_root / family / "01.png").touch()
+            (config.output_root / "iphone").mkdir()
+            (config.output_root / "iphone" / "01.png").touch()
             manifest = json.loads((config.output_root / "asc_upload.json").read_text())
             manifest["locales"]["default"]["iphone"] = [{"filename": "01.png"}]
             (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
@@ -502,7 +502,7 @@ class AscScreensCiTests(unittest.TestCase):
             def runner(cmd, **kwargs):
                 calls.append(cmd)
                 if cmd[:1] == ["asc-screens"]:
-                    self.write_build(out, "iphone", kwargs["env"]["ASC_SCREENS_RUN_ID"])
+                    self.write_build(out, "iphone", kwargs["env"][RUN_ID_ENV])
                     self.write_build(out, "ipad", "run-b")
                 return subprocess.CompletedProcess(cmd, 0, stdout="{}", stderr="")
 
@@ -521,7 +521,7 @@ class AscScreensCiTests(unittest.TestCase):
             def runner(cmd, **kwargs):
                 if cmd[:1] == ["asc-screens"]:
                     calls.append(cmd)
-                    self.write_build(out, "iphone", kwargs["env"]["ASC_SCREENS_RUN_ID"])
+                    self.write_build(out, "iphone", kwargs["env"][RUN_ID_ENV])
                     return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
                 if cmd[1:3] == ["localizations", "list"]:
                     self.write_build(out, "ipad", "run-b")
@@ -531,6 +531,17 @@ class AscScreensCiTests(unittest.TestCase):
                 run_ci(config, cache_dir=root / ".asc-screens-cache", runner=runner)
             self.assertFalse([cmd for cmd in calls if "--replace" in cmd])
 
+    def test_unreadable_manifest_is_a_clean_refusal(self):
+        for text in ('{"locales": {', "[]", ""):
+            with self.subTest(text=text), TemporaryDirectory() as tmp:
+                config = self.screenshot_fixture(Path(tmp), "iphone")
+                (config.output_root / "asc_upload.json").write_text(text)
+                calls = []
+                for kwargs in ({"run_id": None}, {"run_id": "abc"}):
+                    with self.assertRaisesRegex(SystemExit, "unreadable|not a JSON object"):
+                        upload_screenshots(config, runner=self.fake_asc_runner(calls), **kwargs)
+                self.assertEqual(calls, [])
+
     def test_each_run_gets_its_own_run_id(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -539,7 +550,7 @@ class AscScreensCiTests(unittest.TestCase):
 
             def runner(cmd, **kwargs):
                 if cmd[:1] == ["asc-screens"]:
-                    ids.append(kwargs["env"]["ASC_SCREENS_RUN_ID"])
+                    ids.append(kwargs["env"][RUN_ID_ENV])
                     self.write_build(out, "iphone", ids[-1])
                     return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
                 return self.fake_asc_runner([])(cmd, **kwargs)

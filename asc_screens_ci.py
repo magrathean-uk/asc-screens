@@ -309,7 +309,12 @@ def preflight_upload_manifest(config, run_id=None):
     manifest_path = config.output_root / "asc_upload.json"
     if not manifest_path.is_file():
         raise SystemExit(f"Upload manifest not found: {manifest_path}; build locally first")
-    manifest = load_config(manifest_path)
+    try:
+        manifest = load_config(manifest_path)
+    except (OSError, ValueError) as exc:  # e.g. a build killed mid-write left truncated JSON
+        raise SystemExit(f"Upload manifest {manifest_path} is unreadable: {exc}; build locally first") from exc
+    if not isinstance(manifest, dict):
+        raise SystemExit(f"Upload manifest {manifest_path} is not a JSON object; build locally first")
     if run_id is not None and manifest.get("run_id") != run_id:
         raise SystemExit(f"Upload manifest {manifest_path} was not written by this run "
                          f"(run id {manifest.get('run_id') or 'missing'}, expected {run_id}); "

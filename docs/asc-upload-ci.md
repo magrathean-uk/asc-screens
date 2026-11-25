@@ -87,7 +87,7 @@ app's macOS version, so set `"platform": "MAC_OS"` in the CI configuration for a
 Mac upload. The upload stops before replacing anything if Mac screenshots meet a
 non-macOS version, iPhone/iPad screenshots meet a macOS, `TV_OS` or `VISION_OS`
 version, or a `device_type_map` value is not a supported screenshot slot for its family. Values
-are canonicalised as asc does (case and spaces ignored, `APP_` optional) and checked against the
+are canonicalised as asc does (case and surrounding spaces ignored, `APP_` optional) and checked against the
 slots in `asc screenshots sizes --all` (asc 5.14.3): `IPHONE_*` and `IPAD_*` sizes, their
 `IMESSAGE_APP_` forms, and `DESKTOP`. `iphone_67` is a valid iPhone override; `IPHONE_999`,
 `IPAD_BOGUS` and `IMESSAGE_APP_DESKTOP` are refused. Every set is checked before the first
