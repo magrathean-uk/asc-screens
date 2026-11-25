@@ -1,6 +1,6 @@
 # asc-screens
 
-This file provides project context and command references.
+<!-- clean-development-policy:v6 -->
 
 asc-screens is a local command-line workflow that generates, validates, frames and uploads App Store Connect screenshots. Screenshot generation, validation, framing and preview creation run locally. Uploads use the external `asc` CLI through `asc-screens-ci`, with `--replace` and separately configured account authentication.
 
@@ -30,3 +30,5 @@ python3 asc_screens.py --check ./existing-screenshots
 ```
 
 `.github/CONTRIBUTING.md` describes commands and manual acceptance checks. Rendering and uploading have additional input, external-tool and account dependencies beyond the local Python checks. `README.md` describes the user workflow; `docs/asc-upload-ci.md` describes the upload handoff.
+
+Public repo: no GitHub Releases; versions are annotated `vX.Y.Z` tags (plus `build-*` tags). Passover and decisions live in `~/dev/records/asc-screens/`, not in this repo.
