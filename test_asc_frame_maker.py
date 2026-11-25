@@ -1,3 +1,4 @@
+import io
 import unittest
 import json
 import os
@@ -565,17 +566,44 @@ class AscFrameMakerTests(unittest.TestCase):
             root = Path(tmp)
             (root / "mac").mkdir()
             (root / "mac" / "01.png").touch()
+            (root / "asc_out" / "mac").mkdir(parents=True)
+            (root / "asc_out" / "mac" / "01.png").touch()
             argv = ["asc-screens", str(root), "--kind", "mac", "--background", "#101010,#202020,#303030", "--mac-style", "fill",
-                    "--output-root", str(root / "out")]
+                    "--output-root", str(root / "asc_out")]
             with patch("sys.argv", argv), \
                     patch("asc_screens.shutil.which", return_value="/usr/bin/magick"), \
                     patch("asc_screens.require_frames_bin", side_effect=AssertionError("frames checked")), \
                     patch("asc_screens.prompt_for_background", side_effect=AssertionError("prompted")), \
-                    patch("asc_screens.process_kind", return_value=[]) as process_kind_mock:
+                    patch("asc_screens.process_kind", return_value=[root / "asc_out" / "mac" / "01.png"]) as process_kind_mock:
                 asc_screens.main()
 
         self.assertEqual(process_kind_mock.call_args.args[2], "mac")
         self.assertEqual(process_kind_mock.call_args.args[3][0], "#101010")
+
+    def test_zero_output_build_fails_and_removes_the_previous_upload_manifest(self):
+        import asc_screens
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "iphone").mkdir()
+            (root / "iphone" / "01.png").touch()
+            out = root / "out"
+            (out / "ipad").mkdir(parents=True)
+            stale = out / "asc_upload.json"
+            stale.write_text('{"locales": {"default": {"ipad": [{"filename": "01.png"}]}}}', encoding="utf-8")
+            argv = ["asc-screens", str(root), "--kind", "iphone", "--background", "#101010,#202020,#303030",
+                    "--output-root", str(out)]
+            with patch("sys.argv", argv), \
+                    patch("asc_screens.shutil.which", return_value="/usr/bin/magick"), \
+                    patch("asc_screens.require_frames_bin", return_value=Path("frames")), \
+                    patch("asc_screens.frame_inputs", return_value=[]), \
+                    patch("sys.stderr", new_callable=io.StringIO) as stderr:
+                with self.assertRaises(SystemExit) as raised:
+                    asc_screens.main()
+
+            self.assertNotIn(raised.exception.code, (0, None))
+            self.assertIn("No screenshots were produced", str(raised.exception.code) + stderr.getvalue())
+            self.assertFalse(stale.exists())
 
     @patch("asc_screens.run")
     def test_process_mac_scales_exact_without_framing_or_text(self, run_mock):

@@ -253,6 +253,22 @@ PLACEMENT_COMMANDS = {
 CREATIVE_PLACEMENTS = {"PRODUCT_PAGE_HEADER_ASSET", "APP_STORE_SEARCH_RESULTS_ASSET"}
 
 
+FAMILY_PLATFORM = {"iphone": "IOS", "ipad": "IOS", "mac": "MAC_OS"}
+FAMILY_DEVICE_TYPE_HINT = {"iphone": "IPHONE_*", "ipad": "IPAD_*", "mac": "DESKTOP"}
+
+
+def device_type_matches_family(device_type, family):
+    """Accept asc display types with or without the APP_/IMESSAGE_APP_ prefix, within one family only."""
+    name = device_type.strip()
+    for prefix in ("IMESSAGE_APP_", "APP_"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+            break
+    if family == "mac":
+        return name == "DESKTOP"
+    return name.startswith("IPHONE_" if family == "iphone" else "IPAD_")
+
+
 def asc_locale(config, locale):
     return config.default_locale if locale == "default" else locale
 
@@ -283,9 +299,13 @@ def preflight_upload_manifest(config):
                 raise SystemExit(f"No supported device_type_map configured for {family}")
             # Mac screenshots belong to the macOS version, iPhone/iPad ones to the iOS
             # version; stop before any set is replaced rather than halfway through.
-            if (family == "mac") != (config.platform == "MAC_OS"):
+            if config.platform != FAMILY_PLATFORM[family]:
                 raise SystemExit(f"{family} screenshots cannot upload to a {config.platform} version; "
-                                 "build and upload Mac screenshots in a separate run with platform MAC_OS")
+                                 f"they belong to a {FAMILY_PLATFORM[family]} version"
+                                 + ("; build and upload Mac screenshots in a separate run with platform MAC_OS" if family == "mac" else ""))
+            if not device_type_matches_family(device_type, family):
+                raise SystemExit(f"device_type_map {device_type} is not a {family} device type; "
+                                 f"expected {FAMILY_DEVICE_TYPE_HINT[family]}")
             if not isinstance(entries, list) or not 1 <= len(entries) <= 10:
                 raise SystemExit(f"Screenshot set {locale}/{family} must contain 1 to 10 files")
             directory = (config.output_root / locale / family if locale != "default" else config.output_root / family).resolve()
@@ -423,6 +443,9 @@ def run_ci(config, cache_dir=None, force=False, asc_bin="asc", runner=subprocess
     marker = cache_dir / f"{config.cache_key}.done"
     if marker.exists() and not force:
         return CiRunResult("skipped", config.cache_key, config.fingerprint)
+    # Only a manifest written by this build may be uploaded; a stale one from an earlier
+    # build (possibly for another device) must never reach a --replace command.
+    (config.output_root / "asc_upload.json").unlink(missing_ok=True)
     run_command(["asc-screens", "--config", str(config.asc_screens_config)], runner=runner)
     upload_screenshots(config, asc_bin=asc_bin, runner=runner)
     cache_dir.mkdir(parents=True, exist_ok=True)

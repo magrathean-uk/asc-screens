@@ -330,6 +330,80 @@ class AscScreensCiTests(unittest.TestCase):
                 upload_screenshots(config, runner=self.fake_asc_runner(calls))
             self.assertEqual(calls, [])
 
+    def screenshot_fixture(self, root, family, platform="IOS", device_type_map=None):
+        config, manifest = self.creative_fixture(root)
+        path = config.output_root / family
+        path.mkdir()
+        (path / "01.png").touch()
+        manifest["creative_assets"] = []
+        manifest["locales"] = {"default": {family: [{"filename": "01.png", "path": str(path / "01.png")}]}}
+        (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+        return dataclasses.replace(config, platform=platform, device_type_map={**config.device_type_map, **(device_type_map or {})})
+
+    def test_screenshot_families_only_upload_to_their_own_platform(self):
+        for family, platform in (("iphone", "TV_OS"), ("iphone", "VISION_OS"), ("ipad", "TV_OS"), ("ipad", "VISION_OS"),
+                                 ("iphone", "MAC_OS"), ("ipad", "MAC_OS"), ("mac", "IOS"), ("mac", "VISION_OS")):
+            with self.subTest(family=family, platform=platform), TemporaryDirectory() as tmp:
+                config = self.screenshot_fixture(Path(tmp), family, platform)
+                calls = []
+                with self.assertRaisesRegex(SystemExit, f"{family} screenshots cannot upload to a {platform} version"):
+                    upload_screenshots(config, runner=self.fake_asc_runner(calls))
+                self.assertEqual(calls, [])
+                with self.assertRaisesRegex(SystemExit, "cannot upload"):
+                    run_ci(config, dry_run=True)
+
+    def test_device_type_must_belong_to_the_screenshot_family(self):
+        for family, platform, device_type in (("ipad", "IOS", "IPHONE_69"), ("mac", "MAC_OS", "IPHONE_69"),
+                                              ("iphone", "IOS", "IPAD_PRO_3GEN_129"), ("iphone", "IOS", "DESKTOP"),
+                                              ("ipad", "IOS", "DESKTOP"), ("mac", "MAC_OS", "IPAD_PRO_3GEN_129"),
+                                              ("iphone", "IOS", "APP_IPAD_105")):
+            with self.subTest(family=family, device_type=device_type), TemporaryDirectory() as tmp:
+                config = self.screenshot_fixture(Path(tmp), family, platform, {family: device_type})
+                calls = []
+                with self.assertRaisesRegex(SystemExit, f"{device_type}.*not a {family} device type"):
+                    upload_screenshots(config, runner=self.fake_asc_runner(calls))
+                self.assertEqual(calls, [])
+                with self.assertRaisesRegex(SystemExit, "not a .* device type"):
+                    run_ci(config, dry_run=True)
+
+    def test_same_family_device_type_overrides_still_work(self):
+        for family, platform, device_type in (("iphone", "IOS", "IPHONE_67"), ("iphone", "IOS", "APP_IPHONE_65"),
+                                              ("ipad", "IOS", "IPAD_PRO_3GEN_11"), ("mac", "MAC_OS", "DESKTOP")):
+            with self.subTest(family=family, device_type=device_type), TemporaryDirectory() as tmp:
+                config = self.screenshot_fixture(Path(tmp), family, platform, {family: device_type})
+                plan = run_ci(config, dry_run=True)
+                command = plan["commands"][0]
+                self.assertEqual(command[command.index("--device-type") + 1], device_type)
+
+    def test_run_ci_never_uploads_a_manifest_the_current_build_did_not_write(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "out"
+            (root / "asc-screens.json").write_text(json.dumps({"source": "shots", "output_root": "out"}), encoding="utf-8")
+            (root / "shots").mkdir()
+            (root / "shots" / "one.png").write_text("new", encoding="utf-8")
+            (out / "ipad").mkdir(parents=True)
+            (out / "ipad" / "01.png").touch()
+            (out / "asc_upload.json").write_text(
+                json.dumps({"locales": {"default": {"ipad": [{"slot": 1, "filename": "01.png", "path": str(out / "ipad" / "01.png")}]}}}),
+                encoding="utf-8",
+            )
+            ci_config = root / ".asc-screens-ci.json"
+            ci_config.write_text(json.dumps({"app_id": "123", "version": "1.2.3", "asc_screens_config": "asc-screens.json"}), encoding="utf-8")
+            config = load_ci_config(ci_config)
+            calls = []
+
+            def runner(cmd, **kwargs):
+                # The build "succeeds" but writes nothing, as when every input is skipped.
+                calls.append(cmd)
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "Upload manifest not found"):
+                run_ci(config, cache_dir=root / ".asc-screens-cache", runner=runner)
+
+            self.assertEqual([cmd[0] for cmd in calls], ["asc-screens"])
+            self.assertFalse((root / ".asc-screens-cache" / f"{config.cache_key}.done").exists())
+
     def test_unlisted_stale_screenshot_cannot_be_uploaded(self):
         with TemporaryDirectory() as tmp:
             config, manifest = self.creative_fixture(Path(tmp))
