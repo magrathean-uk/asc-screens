@@ -366,8 +366,14 @@ class AscScreensCiTests(unittest.TestCase):
                 with self.assertRaisesRegex(SystemExit, "not a .* device type"):
                     run_ci(config, dry_run=True)
 
+    def test_device_type_whitespace_is_not_sent_to_asc(self):
+        with TemporaryDirectory() as tmp:
+            config = self.screenshot_fixture(Path(tmp), "iphone", "IOS", {"iphone": " IPHONE_67 "})
+            command = run_ci(config, dry_run=True)["commands"][0]
+        self.assertEqual(command[command.index("--device-type") + 1], "IPHONE_67")
+
     def test_same_family_device_type_overrides_still_work(self):
-        for family, platform, device_type in (("iphone", "IOS", "IPHONE_67"), ("iphone", "IOS", "APP_IPHONE_65"),
+        for family, platform, device_type in (("iphone", "IOS", "IPHONE_67"), ("iphone", "IOS", "APP_IPHONE_65"), ("iphone", "IOS", "IMESSAGE_APP_IPHONE_67"),
                                               ("ipad", "IOS", "IPAD_PRO_3GEN_11"), ("mac", "MAC_OS", "DESKTOP")):
             with self.subTest(family=family, device_type=device_type), TemporaryDirectory() as tmp:
                 config = self.screenshot_fixture(Path(tmp), family, platform, {family: device_type})

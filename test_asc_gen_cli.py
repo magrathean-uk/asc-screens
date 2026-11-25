@@ -58,6 +58,37 @@ class AscGenCliTests(unittest.TestCase):
         self.assertEqual(cli.choose_template("top"), "title-top")
         self.assertEqual(cli.choose_template("bottom"), "title-bottom")
 
+    def test_guided_build_with_no_output_fails_and_clears_the_previous_manifest(self):
+        import io
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+
+        import asc_gen
+        from asc_screens import ImageJob
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            out = root / "asc_out"
+            out.mkdir()
+            stale = out / "asc_upload.json"
+            stale.write_text("{}", encoding="utf-8")
+            answers = iter([str(root), str(out)])
+            with patch.object(asc_gen, "ask", lambda *args, **kwargs: next(answers)), \
+                    patch.object(asc_gen, "prompt_mode", return_value="build"), \
+                    patch.object(asc_gen, "prompt_asset", return_value="screenshots"), \
+                    patch.object(asc_gen, "collect_jobs", return_value=[ImageJob(root / "a.png", "iphone")]), \
+                    patch.object(asc_gen, "prompt_kinds", return_value=["iphone"]), \
+                    patch.object(asc_gen, "prompt_background", return_value=["#101010", "#202020", "#303030"]), \
+                    patch.object(asc_gen, "prompt_copy_file", return_value=None), \
+                    patch.object(asc_gen, "prompt_template", return_value="plain"), \
+                    patch.object(asc_gen, "needs_frames", return_value=False), \
+                    patch.object(asc_gen, "preflight_mac_desktop"), \
+                    patch.object(asc_gen, "process_kind", return_value=[]), \
+                    patch("sys.stdout", new_callable=io.StringIO):
+                with self.assertRaisesRegex(SystemExit, "No screenshots were produced"):
+                    asc_gen.main()
+            self.assertFalse(stale.exists())
+
     def test_count_by_kind(self):
         cli = load_cli()
         jobs = [SimpleNamespace(device="iphone"), SimpleNamespace(device="ipad"), SimpleNamespace(device="iphone"), SimpleNamespace(device="mac")]

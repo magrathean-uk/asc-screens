@@ -359,6 +359,29 @@ class AscFrameMakerTests(unittest.TestCase):
         self.assertEqual(layout.layers[0].height, 330)
         self.assertGreater(layout.frame_top, layout.layers[0].top + 330)
 
+    def test_empty_source_still_clears_the_previous_upload_manifest(self):
+        import asc_screens
+
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "empty").mkdir()
+            out = root / "out"
+            out.mkdir()
+            stale = out / "asc_upload.json"
+            stale.write_text("{}", encoding="utf-8")
+            argv = ["asc-screens", str(root / "empty"), "--background", "#101010,#202020,#303030", "--output-root", str(out)]
+            with patch("sys.argv", argv), patch("asc_screens.shutil.which", return_value="/usr/bin/magick"):
+                asc_screens.main()
+            self.assertFalse(stale.exists())
+
+    def test_zero_output_message_names_the_requested_and_found_kinds(self):
+        from asc_screens import ImageJob, require_outputs
+
+        with self.assertRaises(SystemExit) as raised:
+            require_outputs([], [ImageJob(Path("a.png"), "iphone")], ["mac"])
+        self.assertIn("kind(s) mac", str(raised.exception))
+        self.assertIn("found for: iphone", str(raised.exception))
+
     def test_changelog_claims_match_caption_wrapping_and_mac_default(self):
         # Two long words that cannot share a line still wrap one per line, so the release note
         # must not promise that a one-word last line never happens.

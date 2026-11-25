@@ -10,12 +10,14 @@ from asc_creative import (
 
 from asc_mac_desktop import bundle_name, is_bundle
 from asc_screens import (
+    clear_upload_manifest,
     collect_jobs,
     default_frames_bin,
     needs_frames,
     preflight_mac_desktop,
     process_kind,
     require_frames_bin,
+    require_outputs,
     resolve_background_palette,
     require_unique_output_names,
     resolve_localized_builds,
@@ -247,6 +249,7 @@ def main():
     )
     preflight_mac_desktop(args, jobs, resolved_kinds)
 
+    clear_upload_manifest(output_root)
     total = 0
     outputs = []
     for build_locale, copy in resolve_localized_builds(copy_file, locale):
@@ -258,6 +261,7 @@ def main():
                 built = process_kind(scoped_args, jobs, resolved_kind, background_colors, target_size=target_size, template=template, copy=copy)
                 outputs.extend(built)
                 total += len(built)
+    require_outputs(outputs, jobs, resolved_kinds)
     write_review_manifest(output_root, outputs)
     write_contact_sheet(output_root, outputs)
     write_upload_manifest(output_root, outputs)

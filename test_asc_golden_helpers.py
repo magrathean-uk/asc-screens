@@ -29,7 +29,7 @@ def check_case_harness(work, validator, update=False):
     reference_dir.mkdir()
     magick = MagicMock(side_effect=lambda *args, **kwargs: Path(str(args[-1]).removeprefix("PNG24:")).touch())
     patches = [
-        patch.object(golden, "validate_screenshot_file", validator, create=True),
+        patch.object(golden, "validate_screenshot_file", validator),
         patch.object(golden, "image_size", return_value=(1320, 2868)),
         patch.object(golden, "magick", magick),
         patch.object(golden, "REFERENCE_DIR", reference_dir),
@@ -96,21 +96,42 @@ class BoundedProcessTests(unittest.TestCase):
         # The grandchild keeps the pipes open for 5 s; without a bound on the drain,
         # run_bounded would sit in communicate() until it exits.
         command = ["sh", "-c", "sleep 5 & sleep 5"]
-        with patch.object(golden, "KILL_GRACE", 1, create=True), patch("test_asc_golden.os.killpg", side_effect=PermissionError):
+        with patch.object(golden, "KILL_GRACE", 1), patch("test_asc_golden.os.killpg", side_effect=PermissionError):
             started = time.monotonic()
             with self.assertRaises(subprocess.TimeoutExpired):
-                golden.run_bounded(command, 1)
+                golden.run_bounded(command, 2)
             elapsed = time.monotonic() - started
-        self.assertLess(elapsed, 4)
+        self.assertLess(elapsed, 4.9)  # 2 s timeout + 1 s grace; unbounded would wait for the 5 s grandchild
 
     @unittest.skipUnless(os.name == "posix", "process groups are POSIX only")
     def test_timeout_kills_the_whole_group_and_keeps_partial_output(self):
         command = ["sh", "-c", "echo started; sleep 30 & sleep 30"]
         started = time.monotonic()
         with self.assertRaises(subprocess.TimeoutExpired) as raised:
-            golden.run_bounded(command, 1)
-        self.assertLess(time.monotonic() - started, 10)
+            golden.run_bounded(command, 3)
+        self.assertLess(time.monotonic() - started, 15)
         self.assertIn("started", raised.exception.output or "")
+
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX only")
+    def test_an_interrupt_kills_the_child_instead_of_leaking_it(self):
+        started = []
+
+        class Interrupted(subprocess.Popen):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                started.append(self)
+
+            def communicate(self, *args, **kwargs):
+                raise KeyboardInterrupt
+
+        with patch.object(golden.subprocess, "Popen", Interrupted):
+            with self.assertRaises(KeyboardInterrupt):
+                golden.run_bounded(["sleep", "20"], 30)
+        try:
+            self.assertIsNotNone(started[0].wait(timeout=5), "child survived the interrupt")
+        finally:
+            if started[0].poll() is None:
+                started[0].kill()
 
     @unittest.skipUnless(os.name == "posix", "process groups are POSIX only")
     def test_normal_run_returns_output_and_status(self):

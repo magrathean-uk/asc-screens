@@ -30,13 +30,13 @@ records behavior present in the checkout; it does not identify a published relea
   Mac and iPhone/iPad sets with the wrong platform before uploading, and
   fingerprints the Mac wallpaper, app icon and Dock icons.
 - A screenshot build that produces nothing (every input skipped, or no input matching `--kind`)
-  now exits with an error, and every screenshot build removes the previous `asc_upload.json`
+  now exits with an error (the guided `asc-gen` too), and every screenshot build removes the previous `asc_upload.json`
   first. `asc-screens-ci` also removes it before building, so only the current build's
   manifest can reach a `--replace` upload.
 - `asc-screens-ci` now checks the platform and device type of each screenshot set before building
   any command: iPhone and iPad sets need platform `IOS` (not `TV_OS` or `VISION_OS`), Mac sets need
   `MAC_OS`, and `device_type_map` values must belong to the family (`IPHONE_*`, `IPAD_*`, `DESKTOP`,
-  with an optional `APP_` prefix). Same-family overrides such as `IPHONE_67` still work.
+  with an optional `APP_` or `IMESSAGE_APP_` prefix). Same-family overrides such as `IPHONE_67` still work.
 - The golden check validates the full-size output (opaque, App Store size) before comparing, also in
   update mode, bounds its subprocess calls and timeout recovery, and ignores an `ASC_GOLDEN_OUT`
   inside the checkout.

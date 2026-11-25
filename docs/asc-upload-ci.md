@@ -87,10 +87,11 @@ app's macOS version, so set `"platform": "MAC_OS"` in the CI configuration for a
 Mac upload. The upload stops before replacing anything if Mac screenshots meet a
 non-macOS version, iPhone/iPad screenshots meet a macOS, `TV_OS` or `VISION_OS`
 version, or a `device_type_map` value belongs to another family (it must be
-`IPHONE_*`, `IPAD_*` or `DESKTOP` for its family, with an optional `APP_` prefix;
+`IPHONE_*`, `IPAD_*` or `DESKTOP` for its family, with an optional `APP_` or `IMESSAGE_APP_` prefix;
 for example `IPHONE_67` is a valid iPhone override). Each run deletes the previous
 `asc_upload.json` before building and uploads only the manifest the build wrote;
-a build that produces no screenshots fails instead of reusing an old manifest. Legacy `--preview` videos are not
+a build that produces no screenshots fails instead of reusing an old manifest.
+Legacy `--preview` videos are not
 uploaded by this wrapper. Creative videos from `--asset` are uploaded to the
 Asset Library.
 

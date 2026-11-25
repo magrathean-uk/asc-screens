@@ -116,6 +116,8 @@ def run_bounded(command, timeout, **kwargs):
             raise subprocess.TimeoutExpired(command, timeout, output=stdout, stderr=stderr)
         return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
     finally:
+        if proc.poll() is None:
+            kill_group(proc)  # Ctrl-C or another error: the child has its own session and would outlive us
         for pipe in (proc.stdout, proc.stderr):
             try:
                 pipe.close()

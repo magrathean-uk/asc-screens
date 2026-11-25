@@ -931,6 +931,24 @@ def write_review_manifest(output_root, outputs):
     return manifest_path
 
 
+def clear_upload_manifest(output_root):
+    """Drop the previous build's upload manifest so a build that fails or produces nothing cannot
+    leave one behind for a later --replace upload."""
+    path = Path(output_root) / "asc_upload.json"
+    try:
+        path.unlink(missing_ok=True)
+    except OSError as exc:
+        raise SystemExit(f"Cannot clear the previous upload manifest {path}: {exc}") from exc
+
+
+def require_outputs(outputs, jobs, kinds):
+    if outputs:
+        return
+    found = ", ".join(sorted({job.device for job in jobs})) or "none"
+    raise SystemExit(f"No screenshots were produced for kind(s) {', '.join(kinds)} (inputs found for: {found}); "
+                     "any inputs that failed are listed above as 'Skip ...'.")
+
+
 def write_upload_manifest(output_root, outputs):
     if not outputs:
         return None
@@ -1119,6 +1137,7 @@ def main():
     if args.check:
         raise SystemExit(validate_existing_images(args.source))
 
+    clear_upload_manifest(args.output_root)
     jobs = collect_jobs(args.source)
     if not jobs:
         print("No screenshots found. Use PNG, JPG, JPEG, HEIC, HEIF, TIF, or TIFF.")
@@ -1133,9 +1152,6 @@ def main():
     if not args.config and "--background" not in explicit_options:
         background_colors = prompt_for_background(background_colors)
 
-    # A previous build's manifest must not survive into this one: if nothing is produced
-    # below, a later upload step would otherwise replace App Store screenshots with it.
-    (Path(args.output_root) / "asc_upload.json").unlink(missing_ok=True)
     total = 0
     outputs = []
     localized_builds = resolve_localized_builds(args.copy_file, args.locale)
@@ -1147,8 +1163,7 @@ def main():
             built = process_kind(scoped_args, jobs, kind, background_colors, target_size=target_size, template=args.template, copy=copy)
             outputs.extend(built)
             total += len(built)
-    if not outputs:
-        raise SystemExit("No screenshots were produced; every input was skipped or no input matched --kind. See the messages above.")
+    require_outputs(outputs, jobs, kinds)
     write_review_manifest(args.output_root, outputs)
     write_contact_sheet(args.output_root, outputs)
     write_upload_manifest(args.output_root, outputs)

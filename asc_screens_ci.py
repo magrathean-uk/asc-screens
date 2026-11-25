@@ -327,7 +327,7 @@ def preflight_upload_manifest(config):
             actual = {path.resolve() for path in directory.rglob("*") if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg"}}
             if len(declared) != len(entries) or actual != declared:
                 raise SystemExit(f"Screenshot directory differs from manifest: {directory}; rebuild into a fresh output directory")
-            screenshots.append({"locale": asc_locale(config, locale), "family": family, "path": str(directory), "device_type": device_type})
+            screenshots.append({"locale": asc_locale(config, locale), "family": family, "path": str(directory), "device_type": device_type.strip()})
     assets = []
     for entry in creative:
         if not isinstance(entry, dict) or entry.get("media_type") not in {"image", "video"} or not entry.get("path"):
