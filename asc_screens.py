@@ -12,7 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import asc_mac_desktop as mac_desktop
-from asc_creative import CREATIVE_PROFILES, check_creative_assets, load_creative_design, process_creative_assets
+from asc_creative import (CREATIVE_PROFILES, check_creative_assets, current_run_id, load_creative_design,
+                          process_creative_assets)
 
 
 APP_STORE_IPHONE_TARGETS = (
@@ -931,16 +932,6 @@ def write_review_manifest(output_root, outputs):
     return manifest_path
 
 
-def clear_upload_manifest(output_root):
-    """Drop the previous build's upload manifest so a build that fails or produces nothing cannot
-    leave one behind for a later --replace upload."""
-    path = Path(output_root) / "asc_upload.json"
-    try:
-        path.unlink(missing_ok=True)
-    except OSError as exc:
-        raise SystemExit(f"Cannot clear the previous upload manifest {path}: {exc}") from exc
-
-
 def require_outputs(outputs, jobs, kinds):
     if outputs:
         return
@@ -953,7 +944,8 @@ def write_upload_manifest(output_root, outputs):
     if not outputs:
         return None
     root = Path(output_root)
-    payload = {"locales": {}}
+    # asc-screens-ci names its run so it can tell its own manifest from another build's.
+    payload = {"run_id": current_run_id(), "locales": {}} if current_run_id() else {"locales": {}}
     for path in sorted((Path(path) for path in outputs)):
         relative = path.relative_to(root)
         if len(relative.parts) == 3:
@@ -1137,11 +1129,11 @@ def main():
     if args.check:
         raise SystemExit(validate_existing_images(args.source))
 
-    clear_upload_manifest(args.output_root)
     jobs = collect_jobs(args.source)
     if not jobs:
+        # Exit 1 like a zero-output build; the previous upload manifest stays untouched.
         print("No screenshots found. Use PNG, JPG, JPEG, HEIC, HEIF, TIF, or TIFF.")
-        return
+        raise SystemExit(1)
     kinds = [kind for kind, _size in expand_export_targets(args.kind)]
     require_unique_output_names([job for job in jobs if job.device in kinds])
     if needs_frames(jobs, kinds, mac_style(args)):

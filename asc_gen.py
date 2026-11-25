@@ -10,7 +10,6 @@ from asc_creative import (
 
 from asc_mac_desktop import bundle_name, is_bundle
 from asc_screens import (
-    clear_upload_manifest,
     collect_jobs,
     default_frames_bin,
     needs_frames,
@@ -249,7 +248,6 @@ def main():
     )
     preflight_mac_desktop(args, jobs, resolved_kinds)
 
-    clear_upload_manifest(output_root)
     total = 0
     outputs = []
     for build_locale, copy in resolve_localized_builds(copy_file, locale):

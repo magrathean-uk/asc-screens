@@ -299,8 +299,18 @@ def _output_stem(path, source):
     return f"{path.stem}-{digest}"
 
 
+RUN_ID_ENV = "ASC_SCREENS_RUN_ID"
+
+
+def current_run_id():
+    """The run id asc-screens-ci gave this build, or None for a manual run."""
+    return os.environ.get(RUN_ID_ENV) or None
+
+
 def _write_creative_reviews(root, entries):
     upload = {"locales": {}, "creative_assets": entries}
+    if current_run_id():
+        upload = {"run_id": current_run_id(), **upload}
     (root / "asc_upload.json").write_text(json.dumps(upload, indent=2) + "\n", encoding="utf-8")
     (root / "asc_creative_review.json").write_text(
         json.dumps({"creative_assets": entries}, indent=2) + "\n", encoding="utf-8")

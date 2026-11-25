@@ -7,9 +7,11 @@ import math
 import os
 import subprocess
 import sys
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+from asc_creative import RUN_ID_ENV
 from asc_screens import load_config
 
 from asc_mac_desktop import split_list
@@ -204,8 +206,10 @@ def load_ci_config(path, cache_dir=None):
     )
 
 
-def run_command(cmd, runner=subprocess.run, capture_json=False):
+def run_command(cmd, runner=subprocess.run, capture_json=False, env=None):
     kwargs = {"check": True, "text": True}
+    if env is not None:
+        kwargs["env"] = env
     if capture_json:
         kwargs["capture_output"] = True
     try:
@@ -273,12 +277,20 @@ def asc_locale(config, locale):
     return config.default_locale if locale == "default" else locale
 
 
-def preflight_upload_manifest(config):
-    """Validate the entire local handoff before any authenticated or replacing call."""
+def preflight_upload_manifest(config, run_id=None):
+    """Validate the entire local handoff before any authenticated or replacing call.
+
+    With a run_id (a CI run that built the output itself) the manifest must carry that id, so
+    output another build wrote into the same root is never uploaded. Without one (an explicit
+    existing-manifest dry run, or a manifest from the creative exporter) any manifest is accepted."""
     manifest_path = config.output_root / "asc_upload.json"
     if not manifest_path.is_file():
         raise SystemExit(f"Upload manifest not found: {manifest_path}; build locally first")
     manifest = load_config(manifest_path)
+    if run_id is not None and manifest.get("run_id") != run_id:
+        raise SystemExit(f"Upload manifest {manifest_path} was not written by this run "
+                         f"(run id {manifest.get('run_id') or 'missing'}, expected {run_id}); "
+                         "another build is using the same output root, or this build wrote no manifest")
     if not config.app_id:
         raise SystemExit("app_id is required for uploads")
     locales = manifest.get("locales", {})
@@ -398,8 +410,8 @@ def upload_plan(config, asc_bin="asc"):
     return {"app_id": config.app_id, "version": config.version, "platform": config.platform, "creative_asset_target": config.creative_asset_target, "commands": commands, "note": "Local plan only. Placeholder IDs are resolved by read-only app/version/library lookups during upload. Creative assets without an explicit target are uploaded to the Asset Library only. No review submission is performed."}
 
 
-def upload_screenshots(config, asc_bin="asc", runner=subprocess.run):
-    plan = preflight_upload_manifest(config)
+def upload_screenshots(config, asc_bin="asc", runner=subprocess.run, run_id=None):
+    plan = preflight_upload_manifest(config, run_id=run_id)
     run_command([asc_bin, "auth", "status", "--validate"], runner=runner)
     localization_ids = {}
     if plan["needs_version"]:
@@ -417,7 +429,10 @@ def upload_screenshots(config, asc_bin="asc", runner=subprocess.run):
         library_id = library.get("data", {}).get("id")
         if not library_id:
             raise SystemExit("Asset Library lookup returned no library ID")
-    # Every required local path and remote lookup is resolved before replacement.
+    # Every required local path and remote lookup is resolved before replacement. The lookups take
+    # a while, so confirm once more that the handoff is still this run's and unchanged.
+    if preflight_upload_manifest(config, run_id=run_id) != plan:
+        raise SystemExit("The upload manifest or screenshots changed while this run prepared the upload; nothing was replaced")
     for screenshot in plan["screenshots"]:
         run_command(screenshot_upload_command(asc_bin, screenshot, localization_ids[screenshot["locale"]]), runner=runner)
     for asset in plan["creative_assets"]:
@@ -443,11 +458,12 @@ def run_ci(config, cache_dir=None, force=False, asc_bin="asc", runner=subprocess
     marker = cache_dir / f"{config.cache_key}.done"
     if marker.exists() and not force:
         return CiRunResult("skipped", config.cache_key, config.fingerprint)
-    # Only a manifest written by this build may be uploaded; a stale one from an earlier
-    # build (possibly for another device) must never reach a --replace command.
-    (config.output_root / "asc_upload.json").unlink(missing_ok=True)
-    run_command(["asc-screens", "--config", str(config.asc_screens_config)], runner=runner)
-    upload_screenshots(config, asc_bin=asc_bin, runner=runner)
+    # The renderer stamps this id into its manifest and the upload refuses any other, so a stale
+    # manifest or another build in the same output root never reaches a --replace command.
+    run_id = uuid.uuid4().hex
+    run_command(["asc-screens", "--config", str(config.asc_screens_config)], runner=runner,
+                env={**os.environ, RUN_ID_ENV: run_id})
+    upload_screenshots(config, asc_bin=asc_bin, runner=runner, run_id=run_id)
     cache_dir.mkdir(parents=True, exist_ok=True)
     marker.touch()
     return CiRunResult("uploaded", config.cache_key, config.fingerprint)

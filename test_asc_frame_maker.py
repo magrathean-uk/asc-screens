@@ -359,7 +359,7 @@ class AscFrameMakerTests(unittest.TestCase):
         self.assertEqual(layout.layers[0].height, 330)
         self.assertGreater(layout.frame_top, layout.layers[0].top + 330)
 
-    def test_empty_source_still_clears_the_previous_upload_manifest(self):
+    def test_empty_source_exits_1_and_keeps_the_previous_upload_manifest(self):
         import asc_screens
 
         with TemporaryDirectory() as tmp:
@@ -370,9 +370,12 @@ class AscFrameMakerTests(unittest.TestCase):
             stale = out / "asc_upload.json"
             stale.write_text("{}", encoding="utf-8")
             argv = ["asc-screens", str(root / "empty"), "--background", "#101010,#202020,#303030", "--output-root", str(out)]
-            with patch("sys.argv", argv), patch("asc_screens.shutil.which", return_value="/usr/bin/magick"):
-                asc_screens.main()
-            self.assertFalse(stale.exists())
+            with patch("sys.argv", argv), patch("asc_screens.shutil.which", return_value="/usr/bin/magick"), \
+                    patch("sys.stdout", new_callable=io.StringIO):
+                with self.assertRaises(SystemExit) as raised:
+                    asc_screens.main()
+            self.assertEqual(raised.exception.code, 1)
+            self.assertEqual(stale.read_text(encoding="utf-8"), "{}")
 
     def test_zero_output_message_names_the_requested_and_found_kinds(self):
         from asc_screens import ImageJob, require_outputs
@@ -614,7 +617,7 @@ class AscFrameMakerTests(unittest.TestCase):
         self.assertEqual(process_kind_mock.call_args.args[2], "mac")
         self.assertEqual(process_kind_mock.call_args.args[3][0], "#101010")
 
-    def test_zero_output_build_fails_and_removes_the_previous_upload_manifest(self):
+    def test_zero_output_build_fails_and_keeps_the_previous_upload_manifest(self):
         import asc_screens
 
         with TemporaryDirectory() as tmp:
@@ -637,7 +640,32 @@ class AscFrameMakerTests(unittest.TestCase):
 
             self.assertNotIn(raised.exception.code, (0, None))
             self.assertIn("No screenshots were produced", str(raised.exception.code) + stderr.getvalue())
-            self.assertFalse(stale.exists())
+            self.assertIn('"ipad"', stale.read_text(encoding="utf-8"))
+
+    def test_upload_manifest_records_the_run_id_only_when_one_is_given(self):
+        from asc_screens import write_upload_manifest
+
+        with TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            (out / "iphone").mkdir()
+            shot = out / "iphone" / "01.png"
+            shot.touch()
+            with patch.dict("os.environ", {"ASC_SCREENS_RUN_ID": "run-a"}):
+                write_upload_manifest(out, [shot])
+            self.assertEqual(json.loads((out / "asc_upload.json").read_text(encoding="utf-8"))["run_id"], "run-a")
+            with patch.dict("os.environ", {}, clear=False) as env:
+                env.pop("ASC_SCREENS_RUN_ID", None)
+                write_upload_manifest(out, [shot])
+            self.assertNotIn("run_id", json.loads((out / "asc_upload.json").read_text(encoding="utf-8")))
+
+    def test_creative_upload_manifest_records_the_run_id(self):
+        from asc_creative import _write_creative_reviews
+
+        with TemporaryDirectory() as tmp:
+            out = Path(tmp)
+            with patch.dict("os.environ", {"ASC_SCREENS_RUN_ID": "run-a"}):
+                _write_creative_reviews(out, [])
+            self.assertEqual(json.loads((out / "asc_upload.json").read_text(encoding="utf-8"))["run_id"], "run-a")
 
     @patch("asc_screens.run")
     def test_process_mac_scales_exact_without_framing_or_text(self, run_mock):

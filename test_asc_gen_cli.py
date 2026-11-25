@@ -58,7 +58,7 @@ class AscGenCliTests(unittest.TestCase):
         self.assertEqual(cli.choose_template("top"), "title-top")
         self.assertEqual(cli.choose_template("bottom"), "title-bottom")
 
-    def test_guided_build_with_no_output_fails_and_clears_the_previous_manifest(self):
+    def test_guided_build_with_no_output_fails_and_keeps_the_previous_manifest(self):
         import io
         from tempfile import TemporaryDirectory
         from unittest.mock import patch
@@ -87,7 +87,7 @@ class AscGenCliTests(unittest.TestCase):
                     patch("sys.stdout", new_callable=io.StringIO):
                 with self.assertRaisesRegex(SystemExit, "No screenshots were produced"):
                     asc_gen.main()
-            self.assertFalse(stale.exists())
+            self.assertEqual(stale.read_text(encoding="utf-8"), "{}")
 
     def test_count_by_kind(self):
         cli = load_cli()

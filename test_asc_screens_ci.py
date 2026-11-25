@@ -209,7 +209,8 @@ class AscScreensCiTests(unittest.TestCase):
                     (out / "en-GB" / "iphone").mkdir(parents=True)
                     (out / "en-GB" / "iphone" / "01.png").touch()
                     (out / "asc_upload.json").write_text(
-                        json.dumps({"locales": {"en-GB": {"iphone": [{"slot": 1, "filename": "01.png", "path": str(out / "en-GB" / "iphone" / "01.png")}]}}}),
+                        json.dumps({"run_id": kwargs["env"]["ASC_SCREENS_RUN_ID"],
+                                    "locales": {"en-GB": {"iphone": [{"slot": 1, "filename": "01.png", "path": str(out / "en-GB" / "iphone" / "01.png")}]}}}),
                         encoding="utf-8",
                     )
                 if cmd[:3] == ["asc", "versions", "list"]:
@@ -404,11 +405,98 @@ class AscScreensCiTests(unittest.TestCase):
                 calls.append(cmd)
                 return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
-            with self.assertRaisesRegex(SystemExit, "Upload manifest not found"):
+            with self.assertRaisesRegex(SystemExit, "not written by this run"):
                 run_ci(config, cache_dir=root / ".asc-screens-cache", runner=runner)
 
             self.assertEqual([cmd[0] for cmd in calls], ["asc-screens"])
+            self.assertTrue((out / "asc_upload.json").exists(), "the previous handoff is left alone")
             self.assertFalse((root / ".asc-screens-cache" / f"{config.cache_key}.done").exists())
+
+    def run_fixture(self, root, device_type_map=None):
+        out = root / "out"
+        (root / "asc-screens.json").write_text(json.dumps({"source": "shots", "output_root": "out"}), encoding="utf-8")
+        (root / "shots").mkdir()
+        (root / "shots" / "one.png").write_text("new", encoding="utf-8")
+        payload = {"app_id": "1001", "version": "1.2.3", "asc_screens_config": "asc-screens.json", "default_locale": "en-GB"}
+        if device_type_map:
+            payload["device_type_map"] = device_type_map
+        (root / ".asc-screens-ci.json").write_text(json.dumps(payload), encoding="utf-8")
+        return load_ci_config(root / ".asc-screens-ci.json"), out
+
+    @staticmethod
+    def write_build(out, family, run_id):
+        (out / family).mkdir(parents=True, exist_ok=True)
+        (out / family / "01.png").touch()
+        (out / "asc_upload.json").write_text(json.dumps(
+            {"run_id": run_id, "locales": {"default": {family: [{"slot": 1, "filename": "01.png", "path": str(out / family / "01.png")}]}}}),
+            encoding="utf-8")
+
+    def test_a_run_refuses_a_manifest_another_run_wrote_to_the_shared_root(self):
+        # Run A builds iPhone screenshots; run B writes iPad output into the same root before A
+        # reaches preflight. A must refuse rather than replace sets from B's build.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config, out = self.run_fixture(root)
+            calls = []
+
+            def runner(cmd, **kwargs):
+                calls.append(cmd)
+                if cmd[:1] == ["asc-screens"]:
+                    self.write_build(out, "iphone", kwargs["env"]["ASC_SCREENS_RUN_ID"])
+                    self.write_build(out, "ipad", "run-b")
+                return subprocess.CompletedProcess(cmd, 0, stdout="{}", stderr="")
+
+            with self.assertRaisesRegex(SystemExit, "not written by this run"):
+                run_ci(config, cache_dir=root / ".asc-screens-cache", runner=runner)
+            self.assertEqual([cmd[0] for cmd in calls], ["asc-screens"])
+            self.assertFalse((root / ".asc-screens-cache" / f"{config.cache_key}.done").exists())
+
+    def test_a_run_refuses_a_manifest_replaced_while_it_looks_up_the_version(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config, out = self.run_fixture(root)
+            calls = []
+            base = self.fake_asc_runner(calls)
+
+            def runner(cmd, **kwargs):
+                if cmd[:1] == ["asc-screens"]:
+                    calls.append(cmd)
+                    self.write_build(out, "iphone", kwargs["env"]["ASC_SCREENS_RUN_ID"])
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                if cmd[1:3] == ["localizations", "list"]:
+                    self.write_build(out, "ipad", "run-b")
+                return base(cmd, **kwargs)
+
+            with self.assertRaisesRegex(SystemExit, "changed while|not written by this run"):
+                run_ci(config, cache_dir=root / ".asc-screens-cache", runner=runner)
+            self.assertFalse([cmd for cmd in calls if "--replace" in cmd])
+
+    def test_each_run_gets_its_own_run_id(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            config, out = self.run_fixture(root)
+            ids = []
+
+            def runner(cmd, **kwargs):
+                if cmd[:1] == ["asc-screens"]:
+                    ids.append(kwargs["env"]["ASC_SCREENS_RUN_ID"])
+                    self.write_build(out, "iphone", ids[-1])
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                return self.fake_asc_runner([])(cmd, **kwargs)
+
+            for _ in range(2):
+                run_ci(config, cache_dir=root / ".asc-screens-cache", force=True, runner=runner)
+            self.assertEqual(len(set(ids)), 2)
+            self.assertTrue(all(len(value) >= 16 for value in ids))
+
+    def test_manifest_without_a_run_id_still_passes_the_documented_manual_flows(self):
+        # Existing-manifest dry run and a direct upload_screenshots call have no run to own the file.
+        with TemporaryDirectory() as tmp:
+            config = self.screenshot_fixture(Path(tmp), "iphone")
+            self.assertTrue(run_ci(config, dry_run=True)["commands"])
+            calls = []
+            upload_screenshots(config, runner=self.fake_asc_runner(calls))
+            self.assertTrue([cmd for cmd in calls if "--replace" in cmd])
 
     def test_unlisted_stale_screenshot_cannot_be_uploaded(self):
         with TemporaryDirectory() as tmp:
