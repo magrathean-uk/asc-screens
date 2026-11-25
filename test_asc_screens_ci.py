@@ -1,5 +1,6 @@
 import dataclasses
 import json
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
@@ -410,6 +411,20 @@ class AscScreensCiTests(unittest.TestCase):
                 config = self.screenshot_fixture(Path(tmp), family, platform, {family: device_type})
                 command = run_ci(config, dry_run=True)["commands"][0]
                 self.assertEqual(command[command.index("--device-type") + 1], device_type.strip())
+
+    @unittest.skipUnless(shutil.which("asc"), "asc is not installed")
+    def test_supported_slots_match_the_local_asc_catalogue(self):
+        # Local, read-only catalogue; no account call. A newer asc that adds slots should fail here.
+        from asc_screens_ci import SUPPORTED_SCREENSHOT_SLOTS
+
+        result = subprocess.run(["asc", "screenshots", "sizes", "--all", "--output", "json"], capture_output=True, text=True, timeout=60)
+        if result.returncode != 0:
+            self.skipTest("asc screenshots sizes --all is not available")
+        catalogue = {item["displayType"] for item in json.loads(result.stdout)["sizes"]}
+        ours = set().union(*SUPPORTED_SCREENSHOT_SLOTS.values())
+        self.assertEqual(ours - catalogue, set(), "slots asc no longer lists")
+        phone_pad_mac = {name for name in catalogue if "IPHONE_" in name or "IPAD_" in name or name == "APP_DESKTOP"}
+        self.assertEqual(phone_pad_mac - ours, set(), "slots asc lists that this tool does not offer")
 
     def test_mixed_plan_with_one_unsupported_slot_runs_no_command(self):
         # A valid iPad set sorts before the invalid iPhone slot; it must not be replaced first.

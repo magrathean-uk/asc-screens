@@ -3,6 +3,7 @@ no ImageMagick, Swift or Apple Frames is needed, and ASC_GOLDEN does not have to
 
 import io
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -134,6 +135,37 @@ class BoundedProcessTests(unittest.TestCase):
                 started[0].kill()
 
     @unittest.skipUnless(os.name == "posix", "process groups are POSIX only")
+    def test_an_interrupt_after_the_leader_exited_still_kills_its_group(self):
+        # The leader prints its helper's pid and exits; the helper keeps the pipes and the group alive.
+        helper = []
+
+        class Interrupted(subprocess.Popen):
+            def communicate(self, *args, **kwargs):
+                helper.append(int(self.stdout.readline()))
+                os.waitid(os.P_PID, self.pid, os.WEXITED | os.WNOWAIT)  # leader gone, not yet reaped
+                raise KeyboardInterrupt
+
+        def alive(pid):
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                return False
+            return True
+
+        try:
+            with patch.object(golden.subprocess, "Popen", Interrupted):
+                with self.assertRaises(KeyboardInterrupt):
+                    golden.run_bounded(["sh", "-c", "sleep 30 & echo $!; exit 0"], 30)
+            for _ in range(50):
+                if not alive(helper[0]):
+                    break
+                time.sleep(0.1)
+            self.assertFalse(alive(helper[0]), "the group's helper survived the interrupt")
+        finally:
+            if helper and alive(helper[0]):
+                os.kill(helper[0], signal.SIGKILL)
+
+    @unittest.skipUnless(os.name == "posix", "process groups are POSIX only")
     def test_normal_run_returns_output_and_status(self):
         result = golden.run_bounded(["sh", "-c", "echo out; echo err >&2; exit 3"], 10)
         self.assertEqual((result.returncode, result.stdout.strip(), result.stderr.strip()), (3, "out", "err"))
@@ -159,6 +191,17 @@ class FailureDirTests(unittest.TestCase):
                     self.assertEqual(self.failure_dir(value), default)
             os.chdir(elsewhere)
             self.assertEqual(self.failure_dir("failures"), Path(elsewhere).resolve() / "failures")
+
+    def test_a_temp_directory_inside_the_checkout_is_not_used_as_the_fallback(self):
+        inside = golden.ROOT / "tmp-inside-checkout"
+        for value in (None, ".", "golden-out", str(inside / "elsewhere")):
+            with self.subTest(value=value), patch.object(golden.tempfile, "gettempdir", return_value=str(inside)):
+                previous = Path.cwd()
+                os.chdir(golden.ROOT)
+                self.addCleanup(os.chdir, previous)
+                chosen = self.failure_dir(value).resolve()
+                self.assertFalse(chosen == golden.ROOT or chosen.is_relative_to(golden.ROOT), chosen)
+                self.assertTrue(chosen.is_relative_to(Path("/tmp").resolve()), chosen)
 
     def test_external_and_default_destinations_are_kept(self):
         with tempfile.TemporaryDirectory() as elsewhere:

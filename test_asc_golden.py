@@ -68,18 +68,25 @@ TOOL_TIMEOUT = 120
 KILL_GRACE = 5
 
 
+def _in_checkout(path):
+    path = Path(path).expanduser().resolve()
+    return path == ROOT or path.is_relative_to(ROOT)
+
+
 def failure_dir():
-    """Where failure images go: ASC_GOLDEN_OUT, unless it points into this checkout, then the temp default."""
+    """Where failure images go: ASC_GOLDEN_OUT, unless it points into this checkout, then the temp
+    default; if the temp directory is itself inside the checkout, /tmp."""
     default = Path(tempfile.gettempdir()) / "asc-screens-golden"
+    if _in_checkout(default):
+        default = Path("/tmp") / "asc-screens-golden"
     value = os.environ.get("ASC_GOLDEN_OUT")
     if not value:
         return default
-    path = Path(value).expanduser().resolve()
-    if path == ROOT or path.is_relative_to(ROOT):
+    if _in_checkout(value):
         print(f"ASC_GOLDEN_OUT={value} is inside the checkout; writing failure images to {default} instead",
               file=sys.stderr)
         return default
-    return path
+    return Path(value).expanduser().resolve()
 
 
 def kill_group(proc):
@@ -103,9 +110,11 @@ def run_bounded(command, timeout, **kwargs):
     Recovery is bounded too: the pipe drain after the kill waits at most KILL_GRACE seconds."""
     proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
                             start_new_session=True, **kwargs)
+    finished = False
     try:
         try:
             stdout, stderr = proc.communicate(timeout=timeout)
+            finished = True
         except subprocess.TimeoutExpired:
             kill_group(proc)
             try:
@@ -116,8 +125,10 @@ def run_bounded(command, timeout, **kwargs):
             raise subprocess.TimeoutExpired(command, timeout, output=stdout, stderr=stderr)
         return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
     finally:
-        if proc.poll() is None:
-            kill_group(proc)  # Ctrl-C or another error: the child has its own session and would outlive us
+        if not finished:
+            # Ctrl-C or another error: the child has its own session and would outlive us. Signal the
+            # group even when the leader has already exited; its helpers may still hold the pipes.
+            kill_group(proc)
         for pipe in (proc.stdout, proc.stderr):
             try:
                 pipe.close()
