@@ -261,16 +261,39 @@ FAMILY_PLATFORM = {"iphone": "IOS", "ipad": "IOS", "mac": "MAC_OS"}
 FAMILY_DEVICE_TYPE_HINT = {"iphone": "IPHONE_*", "ipad": "IPAD_*", "mac": "DESKTOP"}
 
 
-def device_type_matches_family(device_type, family):
-    """Accept asc display types with or without the APP_/IMESSAGE_APP_ prefix, within one family only."""
-    name = device_type.strip()
-    for prefix in ("IMESSAGE_APP_", "APP_"):
-        if name.startswith(prefix):
-            name = name[len(prefix):]
-            break
-    if family == "mac":
-        return name == "DESKTOP"
-    return name.startswith("IPHONE_" if family == "iphone" else "IPAD_")
+# Screenshot slots asc accepts for each family, from `asc screenshots sizes --all` (asc 5.14.3,
+# a local read-only catalogue). Refresh this when the pinned asc changes. Watch, TV and Vision Pro
+# slots are not screenshot families of this tool.
+_IPHONE_SIZES = ("40", "47", "55", "58", "61", "65", "67", "69")
+_IPAD_SIZES = ("105", "97", "PRO_129", "PRO_3GEN_11", "PRO_3GEN_129")
+SUPPORTED_SCREENSHOT_SLOTS = {
+    "iphone": frozenset({"APP_IPHONE_35", "APP_IPHONE_DUO"}
+                        | {f"{prefix}IPHONE_{size}" for prefix in ("APP_", "IMESSAGE_APP_") for size in _IPHONE_SIZES}),
+    "ipad": frozenset(f"{prefix}IPAD_{size}" for prefix in ("APP_", "IMESSAGE_APP_") for size in _IPAD_SIZES),
+    "mac": frozenset({"APP_DESKTOP"}),
+}
+FAMILY_NAME_PREFIX = {"iphone": "IPHONE_", "ipad": "IPAD_", "mac": "DESKTOP"}
+
+
+def canonical_device_type(value):
+    """The display type asc resolves a --device-type value to: trimmed, upper-cased, APP_ added unless
+    the value already starts with APP_ or IMESSAGE_ (asc's normalizeScreenshotDisplayType)."""
+    name = value.strip().upper()
+    if not name.startswith(("APP_", "IMESSAGE_")):
+        name = "APP_" + name
+    return name
+
+
+def check_device_type(device_type, family):
+    """Refuse a device type that is not a supported screenshot slot for the family."""
+    canonical = canonical_device_type(device_type)
+    name = canonical.removeprefix("IMESSAGE_APP_").removeprefix("APP_")
+    if not name.startswith(FAMILY_NAME_PREFIX[family]):
+        raise SystemExit(f"device_type_map {device_type} is not a {family} device type; "
+                         f"expected {FAMILY_DEVICE_TYPE_HINT[family]}")
+    if canonical not in SUPPORTED_SCREENSHOT_SLOTS[family]:
+        raise SystemExit(f"device_type_map {canonical} is not a supported {family} screenshot slot; "
+                         f"asc supports: {', '.join(sorted(SUPPORTED_SCREENSHOT_SLOTS[family]))}")
 
 
 def asc_locale(config, locale):
@@ -315,9 +338,7 @@ def preflight_upload_manifest(config, run_id=None):
                 raise SystemExit(f"{family} screenshots cannot upload to a {config.platform} version; "
                                  f"they belong to a {FAMILY_PLATFORM[family]} version"
                                  + ("; build and upload Mac screenshots in a separate run with platform MAC_OS" if family == "mac" else ""))
-            if not device_type_matches_family(device_type, family):
-                raise SystemExit(f"device_type_map {device_type} is not a {family} device type; "
-                                 f"expected {FAMILY_DEVICE_TYPE_HINT[family]}")
+            check_device_type(device_type, family)
             if not isinstance(entries, list) or not 1 <= len(entries) <= 10:
                 raise SystemExit(f"Screenshot set {locale}/{family} must contain 1 to 10 files")
             directory = (config.output_root / locale / family if locale != "default" else config.output_root / family).resolve()

@@ -382,6 +382,51 @@ class AscScreensCiTests(unittest.TestCase):
                 command = plan["commands"][0]
                 self.assertEqual(command[command.index("--device-type") + 1], device_type)
 
+    def test_unsupported_device_types_are_refused_before_any_command(self):
+        # asc 5.14.3 rejects each of these locally; a prefix match let them into the plan.
+        for family, platform, device_type in (("iphone", "IOS", "IPHONE_999"), ("ipad", "IOS", "IPAD_BOGUS"),
+                                              ("iphone", "IOS", "IMESSAGE_APP_DESKTOP"), ("mac", "MAC_OS", "IMESSAGE_APP_DESKTOP"),
+                                              ("iphone", "IOS", "APP_WATCH_SERIES_10"), ("iphone", "IOS", "")):
+            with self.subTest(device_type=device_type), TemporaryDirectory() as tmp:
+                config = self.screenshot_fixture(Path(tmp), family, platform, {family: device_type})
+                calls = []
+                with self.assertRaises(SystemExit):
+                    upload_screenshots(config, runner=self.fake_asc_runner(calls))
+                self.assertEqual(calls, [])
+                with self.assertRaises(SystemExit):
+                    run_ci(config, dry_run=True)
+
+    def test_unsupported_slot_message_names_the_canonical_type(self):
+        with TemporaryDirectory() as tmp:
+            config = self.screenshot_fixture(Path(tmp), "iphone", "IOS", {"iphone": "iphone_999"})
+            with self.assertRaisesRegex(SystemExit, "APP_IPHONE_999 is not a supported iphone screenshot slot"):
+                run_ci(config, dry_run=True)
+
+    def test_device_types_are_canonicalised_the_way_asc_does(self):
+        for family, platform, device_type in (("iphone", "IOS", "iphone_67"), ("iphone", "IOS", " app_iphone_69 "),
+                                              ("ipad", "IOS", "ipad_pro_3gen_129"), ("mac", "MAC_OS", "desktop"),
+                                              ("mac", "MAC_OS", "App_Desktop"), ("iphone", "IOS", "imessage_app_iphone_61")):
+            with self.subTest(device_type=device_type), TemporaryDirectory() as tmp:
+                config = self.screenshot_fixture(Path(tmp), family, platform, {family: device_type})
+                command = run_ci(config, dry_run=True)["commands"][0]
+                self.assertEqual(command[command.index("--device-type") + 1], device_type.strip())
+
+    def test_mixed_plan_with_one_unsupported_slot_runs_no_command(self):
+        # A valid iPad set sorts before the invalid iPhone slot; it must not be replaced first.
+        with TemporaryDirectory() as tmp:
+            config = self.screenshot_fixture(Path(tmp), "ipad", "IOS")
+            for family in ("iphone",):
+                (config.output_root / family).mkdir()
+                (config.output_root / family / "01.png").touch()
+            manifest = json.loads((config.output_root / "asc_upload.json").read_text())
+            manifest["locales"]["default"]["iphone"] = [{"filename": "01.png"}]
+            (config.output_root / "asc_upload.json").write_text(json.dumps(manifest))
+            config = dataclasses.replace(config, device_type_map={**config.device_type_map, "iphone": "IPHONE_999"})
+            calls = []
+            with self.assertRaisesRegex(SystemExit, "IPHONE_999"):
+                upload_screenshots(config, runner=self.fake_asc_runner(calls))
+            self.assertEqual(calls, [])
+
     def test_run_ci_never_uploads_a_manifest_the_current_build_did_not_write(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
