@@ -5,6 +5,11 @@ records behavior present in the checkout; it does not identify a published relea
 
 ## Unreleased
 
+- Caption wrapping now balances the lines, so a title or subtitle no longer leaves a one-word last line.
+- Added an opt-in golden-image regression check, `ASC_GOLDEN=1 python3 -m unittest test_asc_golden -v`.
+  It renders synthetic fixtures (iPhone with a caption, iPad, Mac framed, desktop and fill) through
+  ImageMagick, Apple Frames and the Swift/AppKit renderer, and compares them with committed
+  references in `tests/golden/`. It is local only and skipped by default.
 - Mac screenshots now look like a normal Mac screen on a MacBook Pro: the window
   capture sits in the middle of a desktop with the menu bar (Apple menu, app name,
   menus, status icons, clock) and the Dock (common apps, the app with its running

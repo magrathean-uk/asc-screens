@@ -25,6 +25,7 @@ ImageMagick supplies validation and rendering, Apple Frames supplies device fram
 ```bash
 python3 -m py_compile asc_screens.py asc_frame_maker.py asc_gen.py asc_screens_ci.py
 python3 -m unittest discover -v
+ASC_GOLDEN=1 python3 -m unittest test_asc_golden -v  # opt-in golden-image render check, local only
 asc-screens --check ./existing-screenshots
 python3 asc_screens.py --check ./existing-screenshots
 ```

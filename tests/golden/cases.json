@@ -1,0 +1,55 @@
+{
+  "note": "Golden-image cases for test_asc_golden.py. Fixtures are synthetic and generated at test time; every value that varies between runs is pinned here.",
+  "background": "#0B1020,#2745D6,#18C6C0",
+  "mac_clock": "Wed 18 Nov 9:41",
+  "mac_app_name": "Sample",
+  "mac_menus": "File,Edit,View,Window,Help",
+  "copy": {"en-GB": {"title": "Plan every route", "subtitle": "Charge less, arrive sooner"}},
+  "cases": [
+    {
+      "name": "iphone-caption",
+      "device": "iphone",
+      "capture": [1320, 2868],
+      "label": "Dashboard",
+      "args": ["--kind", "iphone", "--template", "title-bottom", "--copy-file", "@copy", "--locale", "en-GB"],
+      "output": "en-GB/iphone/Dashboard.png",
+      "size": [1320, 2868]
+    },
+    {
+      "name": "ipad-framed",
+      "device": "ipad",
+      "capture": [2064, 2752],
+      "label": "Overview",
+      "args": ["--kind", "ipad"],
+      "output": "ipad/Overview.png",
+      "size": [2064, 2752]
+    },
+    {
+      "name": "mac-framed",
+      "device": "mac",
+      "capture": [2200, 1400],
+      "label": "Workspace",
+      "args": ["--kind", "mac", "--mac-style", "framed"],
+      "output": "mac/Workspace.png",
+      "size": [2880, 1800]
+    },
+    {
+      "name": "mac-desktop",
+      "device": "mac",
+      "capture": [2200, 1400],
+      "label": "Workspace",
+      "args": ["--kind", "mac", "--mac-style", "desktop"],
+      "output": "mac/Workspace.png",
+      "size": [2880, 1800]
+    },
+    {
+      "name": "mac-fill",
+      "device": "mac",
+      "capture": [2200, 1400],
+      "label": "Workspace",
+      "args": ["--kind", "mac", "--mac-style", "fill"],
+      "output": "mac/Workspace.png",
+      "size": [2880, 1800]
+    }
+  ]
+}
