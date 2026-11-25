@@ -61,7 +61,7 @@ Each full-size output must pass the screenshot validator (opaque, an App Store s
 `test_asc_golden.py` tolerate anti-aliasing noise and fail on a moved frame, a missing
 caption, menu bar or Dock, or a shifted window. A failure writes the actual, reference,
 diff and full-size images to `ASC_GOLDEN_OUT` (default: a folder under the system
-temporary directory; a folder inside the checkout is ignored in favour of the default) and prints their paths.
+temporary directory, or `/tmp` if that is inside the checkout; a folder inside the checkout is ignored in favour of the default) and prints their paths.
 
 The references match one macOS, font, ImageMagick and Apple Frames combination. After an
 intended rendering change or an OS or tool upgrade, inspect the diffs, then rewrite them

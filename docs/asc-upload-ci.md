@@ -86,11 +86,23 @@ App Store slot (`APP_DESKTOP`) in `asc` 5.14.3. Mac screenshots belong to the
 app's macOS version, so set `"platform": "MAC_OS"` in the CI configuration for a
 Mac upload. The upload stops before replacing anything if Mac screenshots meet a
 non-macOS version, iPhone/iPad screenshots meet a macOS, `TV_OS` or `VISION_OS`
-version, or a `device_type_map` value belongs to another family (it must be
-`IPHONE_*`, `IPAD_*` or `DESKTOP` for its family, with an optional `APP_` or `IMESSAGE_APP_` prefix;
-for example `IPHONE_67` is a valid iPhone override). Each run deletes the previous
-`asc_upload.json` before building and uploads only the manifest the build wrote;
-a build that produces no screenshots fails instead of reusing an old manifest.
+version, or a `device_type_map` value is not a supported screenshot slot for its family. Values
+are canonicalised as asc does (case and spaces ignored, `APP_` optional) and checked against the
+slots in `asc screenshots sizes --all` (asc 5.14.3): `IPHONE_*` and `IPAD_*` sizes, their
+`IMESSAGE_APP_` forms, and `DESKTOP`. `iphone_67` is a valid iPhone override; `IPHONE_999`,
+`IPAD_BOGUS` and `IMESSAGE_APP_DESKTOP` are refused. Every set is checked before the first
+replacement, so a valid iPad set is never replaced ahead of an invalid iPhone one.
+
+### Run ownership
+
+Each normal run creates a unique run id, passes it to the renderer in `ASC_SCREENS_RUN_ID` and
+requires the same id in `asc_upload.json` before planning the upload and again just before the
+first replacement. A manifest without it, or with another run's id, stops the run with nothing
+replaced; this covers a build that wrote no manifest and another build writing into the same
+`output_root`. The id is only a guard: do not run two builds against one output folder at the
+same time. Builds no longer delete the previous manifest; a failed, empty or zero-output build
+exits 1 and leaves it untouched, and a successful build replaces it. `--dry-run` inspects an
+existing manifest (including a creative one) and does not need a run id.
 Legacy `--preview` videos are not
 uploaded by this wrapper. Creative videos from `--asset` are uploaded to the
 Asset Library.
