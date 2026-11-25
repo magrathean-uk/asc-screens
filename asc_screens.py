@@ -12,9 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import asc_mac_desktop as mac_desktop
-from asc_creative import (CREATIVE_PROFILES, check_creative_assets, file_sha256, load_creative_design, process_creative_assets,
-                          replace_text_file,
-                          run_id_header)
+from asc_creative import (CREATIVE_PROFILES, check_creative_assets, file_sha256, load_creative_design,
+                          process_creative_assets, replace_text_file, run_id_header)
 
 
 APP_STORE_IPHONE_TARGETS = (

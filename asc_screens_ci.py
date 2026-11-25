@@ -305,7 +305,11 @@ def check_content_hash(path, entry):
     recorded = entry.get("sha256")
     if not isinstance(recorded, str) or not recorded:
         raise SystemExit(f"Manifest entry for {path} has no sha256; the manifest predates content binding, rebuild it")
-    if file_sha256(path) != recorded:
+    try:
+        actual = file_sha256(path)
+    except OSError as exc:  # unreadable, or removed since the is_file() check
+        raise SystemExit(f"{path} cannot be read to check it against the manifest: {exc}; rebuild before uploading") from exc
+    if actual != recorded:
         raise SystemExit(f"{path} changed since the manifest was written (sha256 mismatch); rebuild before uploading")
 
 

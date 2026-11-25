@@ -876,6 +876,19 @@ class ManifestContentBindingTests(unittest.TestCase):
                     upload_screenshots(config, runner=self.runner(calls))
                 self.assertEqual(calls, [])
 
+    def test_a_listed_file_that_cannot_be_read_is_a_clean_refusal(self):
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.build_screenshots(root, b"red")
+            config = self.config_for(root)
+            calls = []
+            with patch("asc_screens_ci.file_sha256", side_effect=PermissionError("denied")):
+                with self.assertRaisesRegex(SystemExit, r"01\.png cannot be read.*denied"):
+                    run_ci(config, dry_run=True)
+                with self.assertRaisesRegex(SystemExit, r"cannot be read"):
+                    upload_screenshots(config, runner=self.runner(calls))
+            self.assertEqual(calls, [])
+
     def test_a_file_changed_while_the_run_looks_up_the_version_is_not_replaced(self):
         with TemporaryDirectory() as tmp:
             root = Path(tmp)
